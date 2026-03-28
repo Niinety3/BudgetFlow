@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from './useAuth'
+import { DEFAULT_CATEGORIES, DEFAULT_RULES } from '@/lib/constants'
 
 export function useHousehold() {
   const { user } = useAuth()
@@ -65,16 +66,42 @@ export function useHousehold() {
       // Create default settings row
       await supabase.from('settings').insert({
         household_id: household.id,
-        annual_profit: 0,
-        monthly_takehome: 0,
-        current_rent: 0,
-        future_rent: 0,
+        annual_profit: 60000,
+        monthly_takehome: 4532.50,
+        current_rent: 975,
+        future_rent: 1600,
         savings_pct: 10,
         tax_personal_allowance: 29500,
         tax_standard_band: 13000,
         tax_standard_rate: 0.1,
         tax_higher_rate: 0.21,
       })
+
+      // Seed default categories
+      const categoryInserts = DEFAULT_CATEGORIES.map((c) => ({
+        household_id: household.id,
+        name: c.name,
+        is_budget_category: c.isBudgetCategory,
+        sort_order: c.sortOrder,
+      }))
+      const { data: insertedCategories } = await supabase
+        .from('categories')
+        .insert(categoryInserts)
+        .select('id, name')
+
+      // Seed default categorisation rules
+      if (insertedCategories) {
+        const categoryMap = new Map(insertedCategories.map((c) => [c.name, c.id]))
+        const ruleInserts = DEFAULT_RULES
+          .filter((r) => categoryMap.has(r.categoryName))
+          .map((r) => ({
+            household_id: household.id,
+            keyword: r.keyword,
+            category_id: categoryMap.get(r.categoryName)!,
+            priority: r.priority,
+          }))
+        await supabase.from('category_rules').insert(ruleInserts)
+      }
 
       setHouseholdId(household.id)
       setLoading(false)

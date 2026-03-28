@@ -188,7 +188,7 @@ export default function SettingsPage() {
           <section className="space-y-4 rounded-xl border border-border bg-card p-5">
             <h2 className="text-base font-semibold text-card-foreground">Income &amp; Tax</h2>
             <div className="grid gap-4 sm:grid-cols-2">
-              <CurrencyInput label="Annual Profit" name="annual_profit" register={register} />
+              <CurrencyInput label="Gross Income (before tax, after NI)" name="annual_profit" register={register} />
               <CurrencyInput label="Monthly Take-Home" name="monthly_takehome" register={register} />
             </div>
           </section>

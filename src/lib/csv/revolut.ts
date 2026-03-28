@@ -16,7 +16,14 @@ export function parseRevolutCSV(csvText: string): ParseResult {
     if (state !== 'completed') continue
 
     const type = (row['Type'] ?? '').trim().toLowerCase()
-    if (type === 'topup' || type === 'exchange') {
+    if (type === 'topup' || type === 'exchange' || type === 'transfer') {
+      internalSkipped++
+      continue
+    }
+
+    // Skip Pocket transactions (internal vault/pocket moves)
+    const description = (row['Description'] ?? '').trim()
+    if (description.toLowerCase().startsWith('pocket')) {
       internalSkipped++
       continue
     }
