@@ -1,9 +1,11 @@
 import { useState } from 'react'
+import { Loader2 } from 'lucide-react'
 import { FileDropZone } from '@/components/import/FileDropZone'
 import { ImportPreview } from '@/components/import/ImportPreview'
 import { ImportSummary } from '@/components/import/ImportSummary'
 import { parseCSV, type BankType } from '@/lib/csv/parser'
 import { categoriseTransaction } from '@/lib/csv/categoriser'
+import { suggestCategory } from '@/lib/suggest-category'
 import { useCategories } from '@/hooks/useCategories'
 import { useHousehold } from '@/hooks/useHousehold'
 import { supabase } from '@/lib/supabase'
@@ -15,9 +17,12 @@ interface PreviewTransaction {
   source: 'revolut' | 'natwest'
   category_id: string | null
   who: 'michael' | 'wife' | 'shared'
+  aiSuggested?: boolean
 }
 
-type Step = 'upload' | 'preview' | 'summary'
+type Step = 'upload' | 'suggesting' | 'preview' | 'summary'
+
+const groqApiKey = import.meta.env.VITE_GROQ_API_KEY ?? ''
 
 export default function ImportPage() {
   const { householdId } = useHousehold()
@@ -37,8 +42,9 @@ export default function ImportPage() {
   })
   const [importing, setImporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [suggestProgress, setSuggestProgress] = useState({ done: 0, total: 0 })
 
-  function handleFileLoaded(csvText: string) {
+  async function handleFileLoaded(csvText: string) {
     setError(null)
     const parsed = parseCSV(csvText)
     if (!parsed) {
@@ -49,7 +55,9 @@ export default function ImportPage() {
     }
 
     const sortedRules = [...rules].sort((a, b) => b.priority - a.priority)
+    const categoryNames = categories.map((c) => c.name)
 
+    // First pass: apply keyword rules
     const transactions: PreviewTransaction[] = parsed.result.transactions.map(
       (t) => ({
         ...t,
@@ -57,6 +65,50 @@ export default function ImportPage() {
         who: 'shared' as const,
       }),
     )
+
+    // Find uncategorised ones for AI suggestions
+    const uncategorised = transactions.filter((t) => !t.category_id)
+
+    if (uncategorised.length > 0 && groqApiKey) {
+      setStep('suggesting')
+      setSuggestProgress({ done: 0, total: uncategorised.length })
+
+      // Deduplicate descriptions to avoid redundant API calls
+      const uniqueDescs = [...new Set(uncategorised.map((t) => t.description))]
+      const suggestionCache: Record<string, string | null> = {}
+
+      let done = 0
+      // Process in batches of 5 to avoid rate limits
+      for (let i = 0; i < uniqueDescs.length; i += 5) {
+        const batch = uniqueDescs.slice(i, i + 5)
+        const results = await Promise.all(
+          batch.map(async (desc) => {
+            const suggestion = await suggestCategory(desc, categoryNames, groqApiKey)
+            return { desc, suggestion }
+          }),
+        )
+        for (const { desc, suggestion } of results) {
+          suggestionCache[desc] = suggestion
+        }
+        done += batch.length
+        setSuggestProgress({
+          done: Math.min(done, uncategorised.length),
+          total: uncategorised.length,
+        })
+      }
+
+      // Apply suggestions
+      for (const txn of transactions) {
+        if (!txn.category_id && suggestionCache[txn.description]) {
+          const suggestedName = suggestionCache[txn.description]
+          const cat = categories.find((c) => c.name === suggestedName)
+          if (cat) {
+            txn.category_id = cat.id
+            txn.aiSuggested = true
+          }
+        }
+      }
+    }
 
     setPreviewData({
       transactions,
@@ -72,7 +124,6 @@ export default function ImportPage() {
     setImporting(true)
 
     try {
-      // Create import batch
       const { data: batch, error: batchError } = await supabase
         .from('import_batches')
         .insert({
@@ -89,7 +140,6 @@ export default function ImportPage() {
       let imported = 0
       let duplicatesSkipped = 0
 
-      // Insert transactions one by one to catch duplicates
       for (const txn of transactions) {
         const { error: insertError } = await supabase
           .from('transactions')
@@ -115,7 +165,6 @@ export default function ImportPage() {
         }
       }
 
-      // Update batch with counts
       await supabase
         .from('import_batches')
         .update({
@@ -163,6 +212,24 @@ export default function ImportPage() {
       )}
 
       {step === 'upload' && <FileDropZone onFileLoaded={handleFileLoaded} />}
+
+      {step === 'suggesting' && (
+        <div className="flex flex-col items-center py-12 space-y-4">
+          <Loader2 className="h-10 w-10 animate-spin text-primary" />
+          <p className="text-lg font-medium">Suggesting categories...</p>
+          <p className="text-sm text-muted-foreground">
+            Looking up {suggestProgress.total} unknown merchants ({suggestProgress.done} done)
+          </p>
+          <div className="w-64 h-2 rounded-full bg-muted overflow-hidden">
+            <div
+              className="h-full bg-primary transition-all"
+              style={{
+                width: `${suggestProgress.total > 0 ? (suggestProgress.done / suggestProgress.total) * 100 : 0}%`,
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       {step === 'preview' && previewData && (
         <>

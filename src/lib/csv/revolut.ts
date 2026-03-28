@@ -16,14 +16,21 @@ export function parseRevolutCSV(csvText: string): ParseResult {
     if (state !== 'completed') continue
 
     const type = (row['Type'] ?? '').trim().toLowerCase()
-    if (type === 'topup' || type === 'exchange' || type === 'transfer') {
+    if (type === 'topup' || type === 'exchange') {
       internalSkipped++
       continue
     }
 
-    // Skip Pocket transactions (internal vault/pocket moves)
     const description = (row['Description'] ?? '').trim()
-    if (description.toLowerCase().startsWith('pocket')) {
+    const descLower = description.toLowerCase()
+
+    // Skip Revolut internal operations
+    if (
+      descLower.startsWith('pocket') ||
+      descLower.includes('savings vault') ||
+      descLower.includes('round up') ||
+      (type === 'transfer' && (descLower.includes('to ') && descLower.includes('account')))
+    ) {
       internalSkipped++
       continue
     }

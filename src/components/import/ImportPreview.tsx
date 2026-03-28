@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Sparkles } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BankType } from '@/lib/csv/parser'
 
@@ -9,6 +10,7 @@ interface PreviewTransaction {
   source: 'revolut' | 'natwest'
   category_id: string | null
   who: 'michael' | 'wife' | 'shared'
+  aiSuggested?: boolean
 }
 
 interface Category {
@@ -39,6 +41,7 @@ export function ImportPreview({
     useState<PreviewTransaction[]>(initialTransactions)
 
   const uncategorised = transactions.filter((t) => !t.category_id).length
+  const aiSuggested = transactions.filter((t) => t.aiSuggested).length
 
   function updateTransaction(
     index: number,
@@ -54,6 +57,7 @@ export function ImportPreview({
                 field === 'category_id'
                   ? value || null
                   : (value as 'michael' | 'wife' | 'shared'),
+              ...(field === 'category_id' ? { aiSuggested: false } : {}),
             }
           : t,
       ),
@@ -72,6 +76,12 @@ export function ImportPreview({
           {internalSkipped > 0 && (
             <span>{internalSkipped} internal skipped</span>
           )}
+          {aiSuggested > 0 && (
+            <span className="text-purple-400 flex items-center gap-1">
+              <Sparkles className="h-3 w-3" />
+              {aiSuggested} AI-suggested
+            </span>
+          )}
           {uncategorised > 0 && (
             <span className="text-warning">{uncategorised} uncategorised</span>
           )}
@@ -86,9 +96,14 @@ export function ImportPreview({
           >
             <div className="flex items-center justify-between mb-2">
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">
-                  {txn.description}
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm font-medium truncate">
+                    {txn.description}
+                  </p>
+                  {txn.aiSuggested && (
+                    <Sparkles className="h-3.5 w-3.5 text-purple-400 flex-shrink-0" />
+                  )}
+                </div>
                 <p className="text-xs text-muted-foreground">
                   {formatDate(txn.date)}
                 </p>
