@@ -5,10 +5,11 @@ import { TransactionList } from '@/components/transactions/TransactionList'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useCategories } from '@/hooks/useCategories'
 import { useHousehold } from '@/hooks/useHousehold'
+import { supabase } from '@/lib/supabase'
 
 export default function TransactionsPage() {
   const { householdId } = useHousehold()
-  const { categories } = useCategories()
+  const { categories, addRule } = useCategories()
   const now = new Date()
 
   const [filters, setFilters] = useState<Filters>({
@@ -19,7 +20,7 @@ export default function TransactionsPage() {
     source: null,
   })
 
-  const { transactions, updateTransaction, deleteTransaction, addTransaction } =
+  const { transactions, updateTransaction, deleteTransaction, addTransaction, refetch } =
     useTransactions(filters.month, filters.year, householdId)
 
   const [showAddForm, setShowAddForm] = useState(false)
@@ -36,6 +37,8 @@ export default function TransactionsPage() {
     category_id: '',
     who: 'shared',
   })
+
+  const [ruleStatus, setRuleStatus] = useState<string | null>(null)
 
   // Apply client-side filters
   const filtered = transactions.filter((t: Record<string, unknown>) => {
@@ -65,6 +68,40 @@ export default function TransactionsPage() {
     setShowAddForm(false)
   }
 
+  async function handleCategoryAssigned(description: string, categoryId: string) {
+    if (!householdId) return
+
+    // 1. Create a keyword rule from the description
+    const keyword = description.toLowerCase().trim()
+    try {
+      await addRule({
+        keyword,
+        category_id: categoryId,
+        priority: 50,
+      })
+    } catch {
+      // Rule may already exist, that's fine
+    }
+
+    // 2. Update all other transactions with the same description to this category
+    const { data: updated } = await supabase
+      .from('transactions')
+      .update({ category_id: categoryId })
+      .eq('household_id', householdId)
+      .eq('description', description)
+      .is('category_id', null)
+      .select('id')
+
+    const count = updated?.length ?? 0
+    setRuleStatus(
+      `Rule created for "${keyword}". ${count > 0 ? `${count} other transaction${count > 1 ? 's' : ''} also updated.` : 'No other matches found.'}`,
+    )
+    setTimeout(() => setRuleStatus(null), 5000)
+
+    // Refresh the list
+    refetch()
+  }
+
   return (
     <div className="p-4 max-w-2xl mx-auto">
       <div className="flex items-center justify-between mb-4">
@@ -78,6 +115,12 @@ export default function TransactionsPage() {
           {showAddForm ? 'Cancel' : 'Add'}
         </button>
       </div>
+
+      {ruleStatus && (
+        <div className="mb-4 rounded-lg bg-success/10 border border-success/50 p-3 text-sm text-success">
+          {ruleStatus}
+        </div>
+      )}
 
       {showAddForm && (
         <div className="mb-4 rounded-lg bg-card border border-border p-4 space-y-3">
@@ -161,6 +204,7 @@ export default function TransactionsPage() {
           })
         }
         onDelete={(id) => deleteTransaction(id)}
+        onCategoryAssigned={handleCategoryAssigned}
       />
     </div>
   )
