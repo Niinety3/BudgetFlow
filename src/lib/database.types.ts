@@ -48,6 +48,9 @@ export interface Database {
           tax_standard_rate: number
           tax_higher_rate: number
           updated_at: string
+          webhook_api_key: string | null
+          michael_card_digits: string | null
+          klaudia_card_digits: string | null
         }
         Insert: {
           household_id: string
@@ -137,7 +140,8 @@ export interface Database {
           amount: number
           category_id: string | null
           who: 'michael' | 'wife' | 'shared'
-          source: 'revolut' | 'natwest' | 'manual'
+          source: 'revolut' | 'natwest' | 'manual' | 'notification'
+          needs_review: boolean
           import_batch_id: string | null
           created_at: string
         }

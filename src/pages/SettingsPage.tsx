@@ -242,8 +242,37 @@ export default function SettingsPage() {
         </form>
 
         {/* Live summary */}
-        <div className="lg:sticky lg:top-6 lg:self-start">
+        <div className="lg:sticky lg:top-6 lg:self-start space-y-6">
           <PayDaySummary values={watchedValues as SettingsFormValues} />
+
+          {/* Auto-Import Settings */}
+          {settings?.webhook_api_key && (
+            <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+              <h3 className="mb-3 text-sm font-semibold text-card-foreground">Auto-Import (Android App)</h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs text-muted-foreground">Webhook API Key</label>
+                  <div className="flex gap-2 mt-1">
+                    <input
+                      readOnly
+                      value={settings.webhook_api_key}
+                      className="flex-1 rounded-lg border border-input bg-muted px-3 py-2 text-xs font-mono text-foreground"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard.writeText(settings.webhook_api_key!)}
+                      className="rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover:opacity-90"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Enter this key in the BudgetFlow Notifier Android app to enable automatic transaction capture from Revolut notifications.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

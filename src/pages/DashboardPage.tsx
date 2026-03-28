@@ -10,6 +10,7 @@ import PayDayBreakdown from '@/components/dashboard/PayDayBreakdown'
 import { BudgetVsActual } from '@/components/dashboard/BudgetVsActual'
 import { SpecialsSection } from '@/components/dashboard/SpecialsSection'
 import { MonthlySummary } from '@/components/dashboard/MonthlySummary'
+import { NeedsReview } from '@/components/dashboard/NeedsReview'
 
 export default function DashboardPage() {
   const taxYear = getCurrentTaxYear()
@@ -77,6 +78,9 @@ export default function DashboardPage() {
         <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
         <p className="text-sm text-muted-foreground">Tax Year {formatTaxYear(taxYear)}</p>
       </div>
+
+      {/* Needs Review */}
+      <NeedsReview />
 
       {/* Month selector */}
       <div className="flex gap-2 overflow-x-auto pb-2">

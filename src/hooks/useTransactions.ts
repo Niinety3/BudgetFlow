@@ -97,6 +97,50 @@ export function useTransactions(
   }
 }
 
+export function useNeedsReviewTransactions(householdId: string | null) {
+  const queryClient = useQueryClient()
+
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ['needs-review', householdId],
+    queryFn: async () => {
+      if (!householdId) return []
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*, categories(name)')
+        .eq('household_id', householdId)
+        .eq('needs_review', true)
+        .order('date', { ascending: false })
+
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: !!householdId,
+    refetchInterval: 30000, // poll every 30s for new review items
+  })
+
+  const { mutateAsync: resolveReview } = useMutation({
+    mutationFn: async ({
+      id,
+      categoryId,
+    }: {
+      id: string
+      categoryId: string
+    }) => {
+      const { error } = await supabase
+        .from('transactions')
+        .update({ category_id: categoryId, needs_review: false })
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['needs-review', householdId] })
+      queryClient.invalidateQueries({ queryKey: ['transactions', householdId] })
+    },
+  })
+
+  return { reviewTransactions: data ?? [], loading, resolveReview }
+}
+
 export function useAllTransactionsForTaxYear(
   taxYear: number,
   householdId: string | null,
