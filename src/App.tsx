@@ -7,6 +7,10 @@ import AppLayout from '@/components/layout/AppLayout'
 import LoginPage from '@/pages/LoginPage'
 import DashboardPage from '@/pages/DashboardPage'
 import SettingsPage from '@/pages/SettingsPage'
+import CategoriesPage from '@/pages/CategoriesPage'
+import ImportPage from '@/pages/ImportPage'
+import TransactionsPage from '@/pages/TransactionsPage'
+import SavingsPage from '@/pages/SavingsPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -16,15 +20,6 @@ const queryClient = new QueryClient({
     },
   },
 })
-
-function PlaceholderPage({ title }: { title: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-20">
-      <h1 className="text-2xl font-bold text-foreground">{title}</h1>
-      <p className="mt-2 text-sm text-muted-foreground">Coming soon.</p>
-    </div>
-  )
-}
 
 function ProtectedRoute({ session, loading }: { session: Session | null; loading: boolean }) {
   if (loading) {
@@ -90,9 +85,10 @@ export default function App() {
             <Route element={<AppLayout />}>
               <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<DashboardPage />} />
-              <Route path="/import" element={<PlaceholderPage title="Import" />} />
-              <Route path="/transactions" element={<PlaceholderPage title="Transactions" />} />
-              <Route path="/savings" element={<PlaceholderPage title="Savings" />} />
+              <Route path="/import" element={<ImportPage />} />
+              <Route path="/transactions" element={<TransactionsPage />} />
+              <Route path="/savings" element={<SavingsPage />} />
+              <Route path="/categories" element={<CategoriesPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
           </Route>

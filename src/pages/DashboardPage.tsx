@@ -3,8 +3,13 @@ import { getCurrentTaxYear, getTaxYearMonths, formatTaxYear } from '@/lib/tax-ye
 import { calculateIoMTax } from '@/lib/tax'
 import { calculatePayDay } from '@/lib/payday'
 import { useSettings } from '@/hooks/useSettings'
+import { useHousehold } from '@/hooks/useHousehold'
+import { useTransactions } from '@/hooks/useTransactions'
 import { cn } from '@/lib/utils'
 import PayDayBreakdown from '@/components/dashboard/PayDayBreakdown'
+import { BudgetVsActual } from '@/components/dashboard/BudgetVsActual'
+import { SpecialsSection } from '@/components/dashboard/SpecialsSection'
+import { MonthlySummary } from '@/components/dashboard/MonthlySummary'
 
 export default function DashboardPage() {
   const taxYear = getCurrentTaxYear()
@@ -19,6 +24,14 @@ export default function DashboardPage() {
   })
 
   const { settings, loading } = useSettings()
+  const { householdId } = useHousehold()
+
+  const selectedM = months[selectedMonth]
+  const { transactions } = useTransactions(
+    selectedM.month,
+    selectedM.year,
+    householdId,
+  )
 
   if (loading) {
     return (
@@ -49,6 +62,14 @@ export default function DashboardPage() {
           futureRent: s.future_rent,
         })
       : null
+
+  // Calculate total budget-category spending for the month
+  const totalSpent = transactions
+    .filter((t: Record<string, unknown>) => {
+      const cat = t.categories as { is_budget_category: boolean } | null
+      return cat?.is_budget_category
+    })
+    .reduce((sum: number, t: Record<string, unknown>) => sum + Number(t.amount), 0)
 
   return (
     <div className="space-y-6">
@@ -91,6 +112,30 @@ export default function DashboardPage() {
           </p>
         </div>
       )}
+
+      {/* Monthly Summary */}
+      {payDayResult && (
+        <MonthlySummary
+          leftToLiveOn={payDayResult.leftToLiveOn}
+          totalSpent={totalSpent}
+        />
+      )}
+
+      {/* Budget vs Actual */}
+      <BudgetVsActual
+        month={selectedM.month}
+        year={selectedM.year}
+        taxYear={taxYear}
+        householdId={householdId}
+      />
+
+      {/* Specials */}
+      <SpecialsSection
+        month={selectedM.month}
+        year={selectedM.year}
+        taxYear={taxYear}
+        householdId={householdId}
+      />
     </div>
   )
 }
