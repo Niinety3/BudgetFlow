@@ -3,12 +3,11 @@ import { supabase } from '@/lib/supabase'
 import { getMonthDateRange, getTaxYearDateRange } from '@/lib/tax-year'
 
 export function useTransactions(
-  month: number,
-  year: number,
+  month: number | null,
+  year: number | null,
   householdId: string | null,
 ) {
   const queryClient = useQueryClient()
-  const { start, end } = getMonthDateRange(month, year)
 
   const {
     data: transactions,
@@ -18,14 +17,20 @@ export function useTransactions(
     queryKey: ['transactions', householdId, month, year],
     queryFn: async () => {
       if (!householdId) return []
-      const { data, error } = await supabase
+      let query = supabase
         .from('transactions')
         .select('*, categories(name, is_budget_category)')
         .eq('household_id', householdId)
-        .gte('date', start.toISOString().slice(0, 10))
-        .lte('date', end.toISOString().slice(0, 10))
         .order('date', { ascending: false })
 
+      if (month !== null && year !== null) {
+        const { start, end } = getMonthDateRange(month, year)
+        query = query
+          .gte('date', start.toISOString().slice(0, 10))
+          .lte('date', end.toISOString().slice(0, 10))
+      }
+
+      const { data, error } = await query
       if (error) throw error
       return data ?? []
     },

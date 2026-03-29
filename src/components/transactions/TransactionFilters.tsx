@@ -4,8 +4,8 @@ interface Category {
 }
 
 export interface Filters {
-  month: number
-  year: number
+  month: number | null
+  year: number | null
   categoryId: string | null
   who: string | null
   source: string | null
@@ -33,13 +33,18 @@ export function TransactionFilters({
         className="rounded border border-border bg-background px-3 py-2 text-sm flex-1 min-w-[150px]"
       />
       <select
-        value={`${filters.year}-${filters.month}`}
+        value={filters.month === null ? 'all' : `${filters.year}-${filters.month}`}
         onChange={(e) => {
-          const [y, m] = e.target.value.split('-').map(Number)
-          setFilters({ ...filters, year: y, month: m })
+          if (e.target.value === 'all') {
+            setFilters({ ...filters, month: null, year: null })
+          } else {
+            const [y, m] = e.target.value.split('-').map(Number)
+            setFilters({ ...filters, year: y, month: m })
+          }
         }}
         className="rounded border border-border bg-background px-3 py-2 text-sm"
       >
+        <option value="all">All Months</option>
         {generateMonthOptions().map((opt) => (
           <option key={opt.value} value={opt.value}>
             {opt.label}
