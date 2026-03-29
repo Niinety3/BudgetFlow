@@ -1,5 +1,5 @@
 import Papa from 'papaparse'
-import type { ParseResult, SkippedTransaction } from './types'
+import type { ParseResult, SkippedTransaction, PotentialRefund } from './types'
 
 export function parseRevolutCSV(csvText: string): ParseResult {
   const parsed = Papa.parse<Record<string, string>>(csvText, {
@@ -9,6 +9,7 @@ export function parseRevolutCSV(csvText: string): ParseResult {
 
   const transactions: ParseResult['transactions'] = []
   const skippedTransactions: SkippedTransaction[] = []
+  const potentialRefunds: PotentialRefund[] = []
   let incomeSkipped = 0
   let internalSkipped = 0
 
@@ -55,6 +56,13 @@ export function parseRevolutCSV(csvText: string): ParseResult {
     }
 
     if (amount >= 0) {
+      // Check if this looks like a refund (from a merchant, not a salary/transfer)
+      const isLikelyRefund = type === 'card_payment' || type === 'refund' ||
+        (description && !descLower.includes('salary') && !descLower.includes('transfer') &&
+         !descLower.includes('top up') && !descLower.includes('from ') && amount < 500)
+      if (isLikelyRefund && description) {
+        potentialRefunds.push({ date, description, amount, source: 'revolut' })
+      }
       incomeSkipped++
       skippedTransactions.push({ date, description, amount, reason: 'income' })
       continue
@@ -68,7 +76,7 @@ export function parseRevolutCSV(csvText: string): ParseResult {
     })
   }
 
-  return { transactions, incomeSkipped, internalSkipped, skippedTransactions }
+  return { transactions, incomeSkipped, internalSkipped, skippedTransactions, potentialRefunds }
 }
 
 function parseRevolutDate(raw: string): string {

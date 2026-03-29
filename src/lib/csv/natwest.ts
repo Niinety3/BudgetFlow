@@ -1,5 +1,5 @@
 import Papa from 'papaparse'
-import type { ParseResult, SkippedTransaction } from './types'
+import type { ParseResult, SkippedTransaction, PotentialRefund } from './types'
 
 export function parseNatWestCSV(csvText: string): ParseResult {
   const parsed = Papa.parse<Record<string, string>>(csvText, {
@@ -9,6 +9,7 @@ export function parseNatWestCSV(csvText: string): ParseResult {
 
   const transactions: ParseResult['transactions'] = []
   const skippedTransactions: SkippedTransaction[] = []
+  const potentialRefunds: PotentialRefund[] = []
   let incomeSkipped = 0
   let internalSkipped = 0
 
@@ -21,6 +22,15 @@ export function parseNatWestCSV(csvText: string): ParseResult {
     const description = (row['Description'] ?? '').trim()
 
     if (value >= 0) {
+      // Check if this looks like a refund
+      const descLowerCheck = description.toLowerCase()
+      const isLikelyRefund = description &&
+        !descLowerCheck.includes('salary') && !descLowerCheck.includes('wages') &&
+        !descLowerCheck.includes('transfer') && !descLowerCheck.includes('interest') &&
+        value < 500
+      if (isLikelyRefund) {
+        potentialRefunds.push({ date, description, amount: value, source: 'natwest' })
+      }
       incomeSkipped++
       skippedTransactions.push({ date, description, amount: value, reason: 'income' })
       continue
@@ -42,7 +52,7 @@ export function parseNatWestCSV(csvText: string): ParseResult {
     })
   }
 
-  return { transactions, incomeSkipped, internalSkipped, skippedTransactions }
+  return { transactions, incomeSkipped, internalSkipped, skippedTransactions, potentialRefunds }
 }
 
 function parseNatWestDate(raw: string): string {

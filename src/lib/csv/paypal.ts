@@ -1,5 +1,5 @@
 import Papa from 'papaparse'
-import type { ParseResult, SkippedTransaction } from './types'
+import type { ParseResult, SkippedTransaction, PotentialRefund } from './types'
 
 export function parsePayPalCSV(csvText: string): ParseResult {
   const parsed = Papa.parse<Record<string, string>>(csvText, {
@@ -9,6 +9,7 @@ export function parsePayPalCSV(csvText: string): ParseResult {
 
   const transactions: ParseResult['transactions'] = []
   const skippedTransactions: SkippedTransaction[] = []
+  const potentialRefunds: PotentialRefund[] = []
   let incomeSkipped = 0
   let internalSkipped = 0
 
@@ -43,8 +44,13 @@ export function parsePayPalCSV(csvText: string): ParseResult {
       continue
     }
 
-    // Positive = incoming money (skip)
+    // Positive = incoming money
     if (gross >= 0) {
+      const isLikelyRefund = type.includes('refund') || type.includes('reversal') ||
+        (description && !type.includes('transfer') && !type.includes('withdraw') && gross < 500)
+      if (isLikelyRefund && description) {
+        potentialRefunds.push({ date, description, amount: gross, source: 'paypal' })
+      }
       incomeSkipped++
       skippedTransactions.push({ date, description, amount: gross, reason: 'income' })
       continue
@@ -61,7 +67,7 @@ export function parsePayPalCSV(csvText: string): ParseResult {
     })
   }
 
-  return { transactions, incomeSkipped, internalSkipped, skippedTransactions }
+  return { transactions, incomeSkipped, internalSkipped, skippedTransactions, potentialRefunds }
 }
 
 function parsePayPalDate(raw: string): string {

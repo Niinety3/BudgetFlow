@@ -22,6 +22,7 @@ export function useTransactions(
         .select('*, categories(name, is_budget_category)')
         .eq('household_id', householdId)
         .order('date', { ascending: false })
+        .limit(5000)
 
       if (month !== null && year !== null) {
         const { start, end } = getMonthDateRange(month, year)

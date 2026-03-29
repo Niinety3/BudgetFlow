@@ -4,12 +4,13 @@ import { FileDropZone } from '@/components/import/FileDropZone'
 import { ImportPreview } from '@/components/import/ImportPreview'
 import { ImportSummary } from '@/components/import/ImportSummary'
 import { parseCSV, type BankType } from '@/lib/csv/parser'
-import type { SkippedTransaction } from '@/lib/csv/types'
+import type { SkippedTransaction, PotentialRefund } from '@/lib/csv/types'
 import { categoriseTransaction } from '@/lib/csv/categoriser'
 import { suggestCategory } from '@/lib/suggest-category'
 import { useCategories } from '@/hooks/useCategories'
 import { useHousehold } from '@/hooks/useHousehold'
 import { supabase } from '@/lib/supabase'
+import { formatCurrency, formatDate } from '@/lib/utils'
 
 interface PreviewTransaction {
   date: string
@@ -19,6 +20,17 @@ interface PreviewTransaction {
   category_id: string | null
   who: 'michael' | 'wife' | 'shared'
   aiSuggested?: boolean
+}
+
+interface MatchedRefund {
+  refund: PotentialRefund
+  matchedTransaction: {
+    id: string
+    date: string
+    description: string
+    amount: number
+  }
+  status: 'pending' | 'confirmed' | 'skipped'
 }
 
 type Step = 'upload' | 'suggesting' | 'preview' | 'summary'
@@ -42,6 +54,7 @@ export default function ImportPage() {
     incomeSkipped: 0,
     uncategorised: 0,
   })
+  const [matchedRefunds, setMatchedRefunds] = useState<MatchedRefund[]>([])
   const [importing, setImporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [suggestProgress, setSuggestProgress] = useState({ done: 0, total: 0 })
@@ -111,6 +124,38 @@ export default function ImportPage() {
         }
       }
     }
+
+    // Match potential refunds against existing transactions in the database
+    const refunds = parsed.result.potentialRefunds ?? []
+    const matched: MatchedRefund[] = []
+    if (refunds.length > 0 && householdId) {
+      for (const refund of refunds) {
+        const { data: matches } = await supabase
+          .from('transactions')
+          .select('id, date, description, amount')
+          .eq('household_id', householdId)
+          .ilike('description', `%${refund.description}%`)
+          .order('date', { ascending: false })
+          .limit(5)
+
+        if (matches && matches.length > 0) {
+          // Find the best match — prefer same amount, then closest amount
+          const exactMatch = matches.find((m) => Math.abs(Number(m.amount) - refund.amount) < 0.01)
+          const bestMatch = exactMatch ?? matches[0]
+          matched.push({
+            refund,
+            matchedTransaction: {
+              id: bestMatch.id,
+              date: bestMatch.date,
+              description: bestMatch.description,
+              amount: Number(bestMatch.amount),
+            },
+            status: 'pending',
+          })
+        }
+      }
+    }
+    setMatchedRefunds(matched)
 
     setPreviewData({
       transactions,
@@ -194,6 +239,21 @@ export default function ImportPage() {
         }
       }
 
+      // Process confirmed refunds
+      let refundsProcessed = 0
+      for (const mr of matchedRefunds) {
+        if (mr.status !== 'confirmed') continue
+        const diff = mr.matchedTransaction.amount - mr.refund.amount
+        if (diff < 0.01) {
+          // Full refund — delete the original transaction
+          await supabase.from('transactions').delete().eq('id', mr.matchedTransaction.id)
+        } else {
+          // Partial refund — reduce the original transaction amount
+          await supabase.from('transactions').update({ amount: diff }).eq('id', mr.matchedTransaction.id)
+        }
+        refundsProcessed++
+      }
+
       const uncategorised = transactions.filter((t) => !t.category_id).length
 
       setSummaryData({
@@ -257,6 +317,49 @@ export default function ImportPage() {
           {importing && (
             <div className="mb-4 rounded-lg bg-muted p-3 text-center text-sm">
               Importing transactions...
+            </div>
+          )}
+          {matchedRefunds.length > 0 && (
+            <div className="mb-4 rounded-lg border border-warning/50 bg-warning/10 p-4 space-y-3">
+              <h3 className="font-semibold text-sm">
+                {matchedRefunds.filter((r) => r.status === 'pending').length} potential refund{matchedRefunds.filter((r) => r.status === 'pending').length !== 1 ? 's' : ''} found
+              </h3>
+              {matchedRefunds.map((mr, i) => (
+                <div key={i} className="rounded-lg bg-card border border-border p-3">
+                  <div className="flex justify-between mb-1">
+                    <span className="text-sm font-medium">{mr.refund.description}</span>
+                    <span className="text-sm font-semibold text-success">+{formatCurrency(mr.refund.amount)}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Matches expense: {formatCurrency(mr.matchedTransaction.amount)} on {formatDate(mr.matchedTransaction.date)}
+                    {mr.refund.amount < mr.matchedTransaction.amount
+                      ? ` (partial refund — would reduce to ${formatCurrency(mr.matchedTransaction.amount - mr.refund.amount)})`
+                      : ' (full refund — would delete expense)'}
+                  </p>
+                  {mr.status === 'pending' ? (
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setMatchedRefunds((prev) => prev.map((r, j) => j === i ? { ...r, status: 'confirmed' } : r))}
+                        className="rounded-md bg-success px-3 py-1 text-xs font-medium text-success-foreground hover:bg-success/90"
+                      >
+                        Yes, it's a refund
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMatchedRefunds((prev) => prev.map((r, j) => j === i ? { ...r, status: 'skipped' } : r))}
+                        className="rounded-md border border-border px-3 py-1 text-xs hover:bg-muted"
+                      >
+                        No, skip
+                      </button>
+                    </div>
+                  ) : (
+                    <span className={`text-xs font-medium ${mr.status === 'confirmed' ? 'text-success' : 'text-muted-foreground'}`}>
+                      {mr.status === 'confirmed' ? 'Will be refunded on import' : 'Skipped'}
+                    </span>
+                  )}
+                </div>
+              ))}
             </div>
           )}
           <ImportPreview
