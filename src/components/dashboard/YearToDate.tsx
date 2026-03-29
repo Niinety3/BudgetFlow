@@ -14,8 +14,9 @@ export function YearToDate({ taxYear, householdId, leftToLiveOn }: YearToDatePro
   const { limits } = useBudgetLimits(taxYear, householdId)
   const { categories } = useCategories()
 
+  const excludedCategories = ['Rent / Mortgage', 'Utilities']
   const budgetCategories = categories.filter(
-    (c) => c.is_budget_category && c.name !== 'Rent / Mortgage',
+    (c) => c.is_budget_category && !excludedCategories.includes(c.name),
   )
 
   // Figure out how many months have data
@@ -30,7 +31,7 @@ export function YearToDate({ taxYear, householdId, leftToLiveOn }: YearToDatePro
   for (const txn of transactions) {
     const t = txn as Record<string, unknown>
     const cat = t.categories as { name: string; is_budget_category: boolean } | null
-    if (cat?.is_budget_category && cat?.name !== 'Rent / Mortgage' && t.category_id) {
+    if (cat?.is_budget_category && !excludedCategories.includes(cat?.name ?? '') && t.category_id) {
       ytdActual[t.category_id as string] =
         (ytdActual[t.category_id as string] ?? 0) + Number(t.amount)
     }

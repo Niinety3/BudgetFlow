@@ -75,6 +75,10 @@ export function useHousehold() {
         tax_standard_band: 13000,
         tax_standard_rate: 0.1,
         tax_higher_rate: 0.21,
+        fixed_bills: [
+          { name: 'Electric', amount: 209 },
+          { name: 'Broadband (Manx Telecom)', amount: 51.65 },
+        ],
       })
 
       // Seed default categories

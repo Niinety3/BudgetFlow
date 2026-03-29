@@ -54,6 +54,10 @@ export default function DashboardPage() {
       })
     : null
 
+  const fixedBillsTotal = s
+    ? (s.fixed_bills ?? []).reduce((sum: number, b: { amount: number }) => sum + b.amount, 0)
+    : 0
+
   const payDayResult =
     s && taxResult
       ? calculatePayDay({
@@ -62,14 +66,16 @@ export default function DashboardPage() {
           savingsPct: s.savings_pct,
           currentRent: s.current_rent,
           futureRent: s.future_rent,
+          fixedBills: fixedBillsTotal,
         })
       : null
 
-  // Calculate total budget-category spending for the month (excluding rent)
+  // Calculate total budget-category spending for the month (excluding rent + utilities)
+  const excludedCategories = ['Rent / Mortgage', 'Utilities']
   const totalSpent = transactions
     .filter((t: Record<string, unknown>) => {
       const cat = t.categories as { name: string; is_budget_category: boolean } | null
-      return cat?.is_budget_category && cat?.name !== 'Rent / Mortgage'
+      return cat?.is_budget_category && !excludedCategories.includes(cat?.name ?? '')
     })
     .reduce((sum: number, t: Record<string, unknown>) => sum + Number(t.amount), 0)
 

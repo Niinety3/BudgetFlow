@@ -51,6 +51,7 @@ export interface Database {
           webhook_api_key: string | null
           michael_card_digits: string | null
           klaudia_card_digits: string | null
+          fixed_bills: { name: string; amount: number }[]
         }
         Insert: {
           household_id: string

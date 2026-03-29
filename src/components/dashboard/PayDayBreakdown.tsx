@@ -11,6 +11,7 @@ export default function PayDayBreakdown({ result }: PayDayBreakdownProps) {
     { label: '2. Savings (% of after-tax)', value: result.savingsAmount },
     { label: '3. Rent gap', value: result.rentGap },
     { label: '4. Current rent', value: result.currentRent },
+    { label: '5. Fixed bills', value: result.fixedBills },
   ]
 
   return (
