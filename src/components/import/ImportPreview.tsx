@@ -356,7 +356,7 @@ export function ImportPreview({
                   className="flex-1 rounded border border-border bg-background px-2 py-1 text-sm"
                 >
                   <option value="">Uncategorised</option>
-                  {categories.map((c) => (
+                  {categories.filter((c) => c.name !== 'Uncategorised').map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
                     </option>

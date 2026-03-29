@@ -185,7 +185,7 @@ export default function TransactionsPage() {
               className="flex-1 rounded border border-border bg-background px-3 py-2 text-sm"
             >
               <option value="">Uncategorised</option>
-              {categories.map((c) => (
+              {categories.filter((c) => c.name !== 'Uncategorised').map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
                 </option>

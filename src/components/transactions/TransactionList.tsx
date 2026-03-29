@@ -186,7 +186,7 @@ export function TransactionList({
                   className="rounded border border-border bg-background px-2 py-1 text-sm flex-1"
                 >
                   <option value="">Uncategorised</option>
-                  {categories.map((c) => (
+                  {categories.filter((c) => c.name !== 'Uncategorised').map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
                     </option>
