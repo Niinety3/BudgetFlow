@@ -19,6 +19,7 @@ export default function TransactionsPage() {
     categoryId: null,
     who: null,
     source: null,
+    search: '',
   })
 
   const { transactions, updateTransaction, deleteTransaction, addTransaction, refetch } =
@@ -58,6 +59,7 @@ export default function TransactionsPage() {
       if (filters.categoryId && t.category_id !== filters.categoryId) return false
       if (filters.who && t.who !== filters.who) return false
       if (filters.source && t.source !== filters.source) return false
+      if (filters.search && !(t.description as string).toLowerCase().includes(filters.search.toLowerCase())) return false
       return true
     })
     .sort((a: Record<string, unknown>, b: Record<string, unknown>) => {

@@ -9,6 +9,7 @@ export interface Filters {
   categoryId: string | null
   who: string | null
   source: string | null
+  search: string
 }
 
 interface TransactionFiltersProps {
@@ -24,6 +25,13 @@ export function TransactionFilters({
 }: TransactionFiltersProps) {
   return (
     <div className="flex flex-wrap gap-2 mb-4">
+      <input
+        type="text"
+        placeholder="Search transactions..."
+        value={filters.search}
+        onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+        className="rounded border border-border bg-background px-3 py-2 text-sm flex-1 min-w-[150px]"
+      />
       <select
         value={`${filters.year}-${filters.month}`}
         onChange={(e) => {
