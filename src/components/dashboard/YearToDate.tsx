@@ -14,7 +14,7 @@ export function YearToDate({ taxYear, householdId, leftToLiveOn }: YearToDatePro
   const { limits } = useBudgetLimits(taxYear, householdId)
   const { categories } = useCategories()
 
-  const excludedCategories = ['Rent / Mortgage', 'Utilities']
+  const excludedCategories = ['Rent / Mortgage', 'Utilities', 'Annual Costs']
   const budgetCategories = categories.filter(
     (c) => c.is_budget_category && !excludedCategories.includes(c.name),
   )

@@ -19,9 +19,10 @@ export const DEFAULT_CATEGORIES: DefaultCategory[] = [
   { name: 'Finance', isBudgetCategory: true, sortOrder: 10 },
   { name: 'Services', isBudgetCategory: true, sortOrder: 11 },
   { name: 'Insurance', isBudgetCategory: true, sortOrder: 12 },
-  { name: 'Special', isBudgetCategory: false, sortOrder: 13 },
-  { name: 'Bank Transfers', isBudgetCategory: false, sortOrder: 14 },
-  { name: 'Uncategorised', isBudgetCategory: false, sortOrder: 15 },
+  { name: 'Annual Costs', isBudgetCategory: false, sortOrder: 13 },
+  { name: 'Special', isBudgetCategory: false, sortOrder: 14 },
+  { name: 'Bank Transfers', isBudgetCategory: false, sortOrder: 15 },
+  { name: 'Uncategorised', isBudgetCategory: false, sortOrder: 16 },
 ]
 
 // ── Default Categorisation Rules ────────────────────────────────────

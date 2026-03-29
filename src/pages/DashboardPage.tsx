@@ -71,7 +71,7 @@ export default function DashboardPage() {
       : null
 
   // Calculate total budget-category spending for the month (excluding rent + utilities)
-  const excludedCategories = ['Rent / Mortgage', 'Utilities']
+  const excludedCategories = ['Rent / Mortgage', 'Utilities', 'Annual Costs']
   const totalSpent = transactions
     .filter((t: Record<string, unknown>) => {
       const cat = t.categories as { name: string; is_budget_category: boolean } | null
