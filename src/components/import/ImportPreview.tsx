@@ -45,6 +45,12 @@ export function ImportPreview({
   const [transactions, setTransactions] =
     useState<PreviewTransaction[]>(initialTransactions)
   const [filter, setFilter] = useState<Filter>('uncategorised')
+  const [bulkPrompt, setBulkPrompt] = useState<{
+    description: string
+    categoryId: string
+    categoryName: string
+    matchCount: number
+  } | null>(null)
 
   const uncategorised = transactions.filter((t) => !t.category_id).length
   const aiSuggested = transactions.filter((t) => t.aiSuggested).length
@@ -66,6 +72,9 @@ export function ImportPreview({
     field: 'category_id' | 'who',
     value: string,
   ) {
+    const txn = transactions[index]
+
+    // Update the single transaction
     setTransactions((prev) =>
       prev.map((t, i) =>
         i === index
@@ -80,6 +89,34 @@ export function ImportPreview({
           : t,
       ),
     )
+
+    // If changing category, check for other transactions with same description
+    if (field === 'category_id' && value && txn) {
+      const others = transactions.filter(
+        (t, i) => i !== index && t.description === txn.description && t.category_id !== value,
+      )
+      if (others.length > 0) {
+        const cat = categories.find((c) => c.id === value)
+        setBulkPrompt({
+          description: txn.description,
+          categoryId: value,
+          categoryName: cat?.name ?? 'this category',
+          matchCount: others.length,
+        })
+      }
+    }
+  }
+
+  function applyBulkUpdate() {
+    if (!bulkPrompt) return
+    setTransactions((prev) =>
+      prev.map((t) =>
+        t.description === bulkPrompt.description
+          ? { ...t, category_id: bulkPrompt.categoryId, aiSuggested: false }
+          : t,
+      ),
+    )
+    setBulkPrompt(null)
   }
 
   return (
@@ -173,6 +210,33 @@ export function ImportPreview({
           )}
         </div>
       </div>
+
+      {/* Bulk update prompt */}
+      {bulkPrompt && (
+        <div className="rounded-lg border border-primary/50 bg-primary/10 p-4 space-y-2">
+          <p className="text-sm">
+            <strong>{bulkPrompt.matchCount}</strong> other transaction{bulkPrompt.matchCount > 1 ? 's' : ''} from{' '}
+            <strong>"{bulkPrompt.description}"</strong> found. Update them all to{' '}
+            <strong>{bulkPrompt.categoryName}</strong>?
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={applyBulkUpdate}
+              className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              Yes, update all
+            </button>
+            <button
+              type="button"
+              onClick={() => setBulkPrompt(null)}
+              className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
+            >
+              No, just this one
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto space-y-2" style={{ maxHeight: 'calc(100vh - 320px)' }}>
         {(filter === 'income-skipped' || filter === 'internal-skipped') ? (
