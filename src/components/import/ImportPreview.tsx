@@ -47,6 +47,8 @@ export function ImportPreview({
   const [transactions, setTransactions] =
     useState<PreviewTransaction[]>(initialTransactions)
   const [filter, setFilter] = useState<Filter>('uncategorised')
+  const [sortBy, setSortBy] = useState<'date' | 'merchant' | 'amount' | 'category'>('date')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [bulkPrompt, setBulkPrompt] = useState<{
     description: string
     categoryId: string
@@ -58,6 +60,20 @@ export function ImportPreview({
   const aiSuggested = transactions.filter((t) => t.aiSuggested).length
   const categorised = transactions.length - uncategorised
 
+  function getCategoryName(categoryId: string | null): string {
+    if (!categoryId) return 'zzz_uncategorised'
+    return categories.find((c) => c.id === categoryId)?.name ?? 'zzz_uncategorised'
+  }
+
+  function toggleSort(field: typeof sortBy) {
+    if (sortBy === field) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortBy(field)
+      setSortDir('asc')
+    }
+  }
+
   const filteredWithIndex = transactions
     .map((t, i) => ({ txn: t, originalIndex: i }))
     .filter(({ txn }) => {
@@ -66,6 +82,16 @@ export function ImportPreview({
         case 'ai-suggested': return txn.aiSuggested
         case 'categorised': return !!txn.category_id
         default: return true
+      }
+    })
+    .sort((a, b) => {
+      const dir = sortDir === 'asc' ? 1 : -1
+      switch (sortBy) {
+        case 'date': return dir * a.txn.date.localeCompare(b.txn.date)
+        case 'merchant': return dir * a.txn.description.localeCompare(b.txn.description)
+        case 'amount': return dir * (a.txn.amount - b.txn.amount)
+        case 'category': return dir * getCategoryName(a.txn.category_id).localeCompare(getCategoryName(b.txn.category_id))
+        default: return 0
       }
     })
 
@@ -220,6 +246,26 @@ export function ImportPreview({
             </button>
           )}
         </div>
+      </div>
+
+      {/* Sort controls */}
+      <div className="flex items-center gap-1 text-xs">
+        <span className="text-muted-foreground mr-1">Sort:</span>
+        {(['date', 'merchant', 'amount', 'category'] as const).map((field) => (
+          <button
+            key={field}
+            type="button"
+            onClick={() => toggleSort(field)}
+            className={cn(
+              'rounded px-2 py-1 transition-colors capitalize',
+              sortBy === field
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted text-muted-foreground hover:bg-muted/80',
+            )}
+          >
+            {field} {sortBy === field ? (sortDir === 'asc' ? '\u2191' : '\u2193') : ''}
+          </button>
+        ))}
       </div>
 
       {/* Bulk update prompt */}
