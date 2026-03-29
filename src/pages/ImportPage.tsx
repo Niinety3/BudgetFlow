@@ -176,6 +176,24 @@ export default function ImportPage() {
         })
         .eq('id', batch.id)
 
+      // Create rules for all categorised transactions (AI-suggested or manually set)
+      // This ensures next import auto-categorises without needing AI again
+      const seenDescriptions = new Set<string>()
+      for (const txn of transactions) {
+        if (txn.category_id && !seenDescriptions.has(txn.description)) {
+          seenDescriptions.add(txn.description)
+          try {
+            await addRule({
+              keyword: txn.description.toLowerCase().trim(),
+              category_id: txn.category_id,
+              priority: 50,
+            })
+          } catch {
+            // Rule may already exist, that's fine
+          }
+        }
+      }
+
       const uncategorised = transactions.filter((t) => !t.category_id).length
 
       setSummaryData({
