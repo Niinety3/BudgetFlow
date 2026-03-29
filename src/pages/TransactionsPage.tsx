@@ -6,6 +6,7 @@ import { useTransactions } from '@/hooks/useTransactions'
 import { useCategories } from '@/hooks/useCategories'
 import { useHousehold } from '@/hooks/useHousehold'
 import { supabase } from '@/lib/supabase'
+import { cn } from '@/lib/utils'
 
 export default function TransactionsPage() {
   const { householdId } = useHousehold()
@@ -39,14 +40,40 @@ export default function TransactionsPage() {
   })
 
   const [ruleStatus, setRuleStatus] = useState<string | null>(null)
+  const [sortBy, setSortBy] = useState<'date' | 'merchant' | 'amount' | 'category'>('date')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
-  // Apply client-side filters
-  const filtered = transactions.filter((t: Record<string, unknown>) => {
-    if (filters.categoryId && t.category_id !== filters.categoryId) return false
-    if (filters.who && t.who !== filters.who) return false
-    if (filters.source && t.source !== filters.source) return false
-    return true
-  })
+  function toggleSort(field: typeof sortBy) {
+    if (sortBy === field) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortBy(field)
+      setSortDir('asc')
+    }
+  }
+
+  // Apply client-side filters and sorting
+  const filtered = transactions
+    .filter((t: Record<string, unknown>) => {
+      if (filters.categoryId && t.category_id !== filters.categoryId) return false
+      if (filters.who && t.who !== filters.who) return false
+      if (filters.source && t.source !== filters.source) return false
+      return true
+    })
+    .sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
+      const dir = sortDir === 'asc' ? 1 : -1
+      switch (sortBy) {
+        case 'date': return dir * String(a.date).localeCompare(String(b.date))
+        case 'merchant': return dir * String(a.description).localeCompare(String(b.description))
+        case 'amount': return dir * (Number(a.amount) - Number(b.amount))
+        case 'category': {
+          const catA = (a.categories as { name: string } | null)?.name ?? 'zzz'
+          const catB = (b.categories as { name: string } | null)?.name ?? 'zzz'
+          return dir * catA.localeCompare(catB)
+        }
+        default: return 0
+      }
+    })
 
   async function handleAdd() {
     if (!newTxn.description || !newTxn.amount) return
@@ -192,6 +219,25 @@ export default function TransactionsPage() {
         setFilters={setFilters}
         categories={categories}
       />
+
+      <div className="flex items-center gap-1 text-xs mb-4">
+        <span className="text-muted-foreground mr-1">Sort:</span>
+        {(['date', 'merchant', 'amount', 'category'] as const).map((field) => (
+          <button
+            key={field}
+            type="button"
+            onClick={() => toggleSort(field)}
+            className={cn(
+              'rounded px-2 py-1 transition-colors capitalize',
+              sortBy === field
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted text-muted-foreground hover:bg-muted/80',
+            )}
+          >
+            {field} {sortBy === field ? (sortDir === 'asc' ? '\u2191' : '\u2193') : ''}
+          </button>
+        ))}
+      </div>
 
       <TransactionList
         transactions={filtered}
