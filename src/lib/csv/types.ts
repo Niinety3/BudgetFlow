@@ -2,7 +2,7 @@ export interface ParsedTransaction {
   date: string
   description: string
   amount: number
-  source: 'revolut' | 'natwest'
+  source: 'revolut' | 'natwest' | 'paypal'
 }
 
 export interface SkippedTransaction {

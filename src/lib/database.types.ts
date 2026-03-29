@@ -140,7 +140,7 @@ export interface Database {
           amount: number
           category_id: string | null
           who: 'michael' | 'wife' | 'shared'
-          source: 'revolut' | 'natwest' | 'manual' | 'notification'
+          source: 'revolut' | 'natwest' | 'manual' | 'notification' | 'paypal'
           needs_review: boolean
           import_batch_id: string | null
           created_at: string

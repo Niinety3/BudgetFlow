@@ -15,7 +15,7 @@ interface PreviewTransaction {
   date: string
   description: string
   amount: number
-  source: 'revolut' | 'natwest'
+  source: 'revolut' | 'natwest' | 'paypal'
   category_id: string | null
   who: 'michael' | 'wife' | 'shared'
   aiSuggested?: boolean

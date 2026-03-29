@@ -8,7 +8,7 @@ interface PreviewTransaction {
   date: string
   description: string
   amount: number
-  source: 'revolut' | 'natwest'
+  source: 'revolut' | 'natwest' | 'paypal'
   category_id: string | null
   who: 'michael' | 'wife' | 'shared'
   aiSuggested?: boolean
@@ -161,7 +161,7 @@ export function ImportPreview({
       <div className="rounded-lg bg-card p-4 border border-border">
         <h3 className="font-semibold text-lg mb-2">
           {transactions.length} transactions from{' '}
-          {bankType === 'revolut' ? 'Revolut' : 'NatWest'}
+          {bankType === 'revolut' ? 'Revolut' : bankType === 'paypal' ? 'PayPal' : 'NatWest'}
         </h3>
         <div className="flex flex-wrap gap-2 text-sm">
           <button
