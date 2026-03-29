@@ -85,6 +85,7 @@ export function TransactionFilters({
         <option value="">All Sources</option>
         <option value="revolut">Revolut</option>
         <option value="natwest">NatWest</option>
+        <option value="paypal">PayPal</option>
         <option value="manual">Manual</option>
       </select>
     </div>

@@ -161,7 +161,7 @@ export default function ImportPage() {
           if (insertError.code === '23505') {
             duplicatesSkipped++
           } else {
-            console.error('Insert error:', insertError)
+            console.error('Insert error:', insertError.code, insertError.message, insertError.details, txn)
           }
         } else {
           imported++
