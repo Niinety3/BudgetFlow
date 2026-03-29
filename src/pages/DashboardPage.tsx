@@ -131,6 +131,7 @@ export default function DashboardPage() {
         year={selectedM.year}
         taxYear={taxYear}
         householdId={householdId}
+        leftToLiveOn={payDayResult?.leftToLiveOn ?? 0}
       />
 
       {/* Specials */}
