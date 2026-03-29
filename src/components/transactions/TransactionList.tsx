@@ -34,35 +34,55 @@ export function TransactionList({
   onCategoryAssigned,
 }: TransactionListProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [pendingRule, setPendingRule] = useState<{
+  const [bulkPrompt, setBulkPrompt] = useState<{
     txnId: string
     description: string
     categoryId: string
     categoryName: string
+    matchingIds: string[]
   } | null>(null)
 
   function handleCategoryChange(txn: Transaction, newCategoryId: string) {
+    // Update the single transaction
     onUpdate(txn.id, { category_id: newCategoryId || undefined })
 
-    // If assigning a category to a previously uncategorised transaction, offer to create a rule
-    if (newCategoryId && !txn.category_id) {
-      const cat = categories.find((c) => c.id === newCategoryId)
-      if (cat) {
-        setPendingRule({
-          txnId: txn.id,
-          description: txn.description,
-          categoryId: newCategoryId,
-          categoryName: cat.name,
-        })
+    if (!newCategoryId) return
+
+    // Check for other transactions with same description but different category
+    const others = transactions.filter(
+      (t) => t.id !== txn.id && t.description === txn.description && t.category_id !== newCategoryId,
+    )
+
+    const cat = categories.find((c) => c.id === newCategoryId)
+    if (!cat) return
+
+    if (others.length > 0) {
+      setBulkPrompt({
+        txnId: txn.id,
+        description: txn.description,
+        categoryId: newCategoryId,
+        categoryName: cat.name,
+        matchingIds: others.map((t) => t.id),
+      })
+    } else {
+      // No other matches — still create a rule for future
+      if (onCategoryAssigned) {
+        onCategoryAssigned(txn.description, newCategoryId)
       }
     }
   }
 
-  function confirmRule() {
-    if (pendingRule && onCategoryAssigned) {
-      onCategoryAssigned(pendingRule.description, pendingRule.categoryId)
+  function applyBulkUpdate() {
+    if (!bulkPrompt) return
+    // Update all matching transactions
+    for (const id of bulkPrompt.matchingIds) {
+      onUpdate(id, { category_id: bulkPrompt.categoryId })
     }
-    setPendingRule(null)
+    // Create rule for future
+    if (onCategoryAssigned) {
+      onCategoryAssigned(bulkPrompt.description, bulkPrompt.categoryId)
+    }
+    setBulkPrompt(null)
   }
 
   if (transactions.length === 0) {
@@ -75,27 +95,28 @@ export function TransactionList({
 
   return (
     <div className="space-y-2">
-      {/* Rule creation prompt */}
-      {pendingRule && (
-        <div className="rounded-lg border border-success/50 bg-success/10 p-3 space-y-2">
+      {/* Bulk update prompt */}
+      {bulkPrompt && (
+        <div className="rounded-lg border border-primary/50 bg-primary/10 p-3 space-y-2">
           <p className="text-sm">
-            Create a rule so <strong>"{pendingRule.description}"</strong> always goes to{' '}
-            <strong>{pendingRule.categoryName}</strong>?
+            <strong>{bulkPrompt.matchingIds.length}</strong> other transaction{bulkPrompt.matchingIds.length > 1 ? 's' : ''} from{' '}
+            <strong>"{bulkPrompt.description}"</strong> found. Update them all to{' '}
+            <strong>{bulkPrompt.categoryName}</strong>?
           </p>
           <p className="text-xs text-muted-foreground">
-            This will also update all other matching transactions.
+            This will also create a rule for future imports.
           </p>
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={confirmRule}
-              className="rounded-md bg-success px-3 py-1.5 text-sm font-medium text-success-foreground hover:bg-success/90"
+              onClick={applyBulkUpdate}
+              className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
             >
-              Yes, create rule
+              Yes, update all
             </button>
             <button
               type="button"
-              onClick={() => setPendingRule(null)}
+              onClick={() => setBulkPrompt(null)}
               className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
             >
               No, just this one
