@@ -27,7 +27,7 @@ const groqApiKey = import.meta.env.VITE_GROQ_API_KEY ?? ''
 
 export default function ImportPage() {
   const { householdId } = useHousehold()
-  const { categories, rules } = useCategories()
+  const { categories, rules, addRule } = useCategories()
   const [step, setStep] = useState<Step>('upload')
   const [previewData, setPreviewData] = useState<{
     transactions: PreviewTransaction[]
@@ -250,6 +250,13 @@ export default function ImportPage() {
             skippedTransactions={previewData.skippedTransactions}
             onConfirm={handleConfirm}
             onCancel={handleCancel}
+            onRuleCreated={async (keyword, categoryId) => {
+              try {
+                await addRule({ keyword, category_id: categoryId, priority: 50 })
+              } catch {
+                // Rule may already exist
+              }
+            }}
           />
         </>
       )}

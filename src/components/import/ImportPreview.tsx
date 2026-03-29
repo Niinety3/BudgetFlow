@@ -28,6 +28,7 @@ interface ImportPreviewProps {
   skippedTransactions: SkippedTransaction[]
   onConfirm: (transactions: PreviewTransaction[]) => void
   onCancel: () => void
+  onRuleCreated?: (keyword: string, categoryId: string) => void
 }
 
 type Filter = 'all' | 'uncategorised' | 'ai-suggested' | 'categorised' | 'income-skipped' | 'internal-skipped'
@@ -41,6 +42,7 @@ export function ImportPreview({
   skippedTransactions,
   onConfirm,
   onCancel,
+  onRuleCreated,
 }: ImportPreviewProps) {
   const [transactions, setTransactions] =
     useState<PreviewTransaction[]>(initialTransactions)
@@ -103,6 +105,11 @@ export function ImportPreview({
           categoryName: cat?.name ?? 'this category',
           matchCount: others.length,
         })
+      } else {
+        // No other matches — still create a rule for future imports
+        if (onRuleCreated) {
+          onRuleCreated(txn.description.toLowerCase().trim(), value)
+        }
       }
     }
   }
@@ -116,6 +123,10 @@ export function ImportPreview({
           : t,
       ),
     )
+    // Create a rule so this is remembered for future imports
+    if (onRuleCreated) {
+      onRuleCreated(bulkPrompt.description.toLowerCase().trim(), bulkPrompt.categoryId)
+    }
     setBulkPrompt(null)
   }
 
