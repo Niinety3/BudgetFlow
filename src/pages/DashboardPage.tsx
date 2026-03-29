@@ -65,11 +65,11 @@ export default function DashboardPage() {
         })
       : null
 
-  // Calculate total budget-category spending for the month
+  // Calculate total budget-category spending for the month (excluding rent)
   const totalSpent = transactions
     .filter((t: Record<string, unknown>) => {
-      const cat = t.categories as { is_budget_category: boolean } | null
-      return cat?.is_budget_category
+      const cat = t.categories as { name: string; is_budget_category: boolean } | null
+      return cat?.is_budget_category && cat?.name !== 'Rent / Mortgage'
     })
     .reduce((sum: number, t: Record<string, unknown>) => sum + Number(t.amount), 0)
 

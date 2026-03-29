@@ -29,8 +29,8 @@ export function YearToDate({ taxYear, householdId, leftToLiveOn }: YearToDatePro
   const ytdActual: Record<string, number> = {}
   for (const txn of transactions) {
     const t = txn as Record<string, unknown>
-    const cat = t.categories as { is_budget_category: boolean } | null
-    if (cat?.is_budget_category && t.category_id) {
+    const cat = t.categories as { name: string; is_budget_category: boolean } | null
+    if (cat?.is_budget_category && cat?.name !== 'Rent / Mortgage' && t.category_id) {
       ytdActual[t.category_id as string] =
         (ytdActual[t.category_id as string] ?? 0) + Number(t.amount)
     }
