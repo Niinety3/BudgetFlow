@@ -4,6 +4,7 @@ import { FileDropZone } from '@/components/import/FileDropZone'
 import { ImportPreview } from '@/components/import/ImportPreview'
 import { ImportSummary } from '@/components/import/ImportSummary'
 import { parseCSV, type BankType } from '@/lib/csv/parser'
+import type { SkippedTransaction } from '@/lib/csv/types'
 import { categoriseTransaction } from '@/lib/csv/categoriser'
 import { suggestCategory } from '@/lib/suggest-category'
 import { useCategories } from '@/hooks/useCategories'
@@ -33,6 +34,7 @@ export default function ImportPage() {
     bankType: BankType
     incomeSkipped: number
     internalSkipped: number
+    skippedTransactions: SkippedTransaction[]
   } | null>(null)
   const [summaryData, setSummaryData] = useState({
     imported: 0,
@@ -115,6 +117,7 @@ export default function ImportPage() {
       bankType: parsed.bankType,
       incomeSkipped: parsed.result.incomeSkipped,
       internalSkipped: parsed.result.internalSkipped,
+      skippedTransactions: parsed.result.skippedTransactions,
     })
     setStep('preview')
   }
@@ -244,6 +247,7 @@ export default function ImportPage() {
             bankType={previewData.bankType}
             incomeSkipped={previewData.incomeSkipped}
             internalSkipped={previewData.internalSkipped}
+            skippedTransactions={previewData.skippedTransactions}
             onConfirm={handleConfirm}
             onCancel={handleCancel}
           />

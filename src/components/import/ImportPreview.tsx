@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Sparkles } from 'lucide-react'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import type { BankType } from '@/lib/csv/parser'
+import type { SkippedTransaction } from '@/lib/csv/types'
 
 interface PreviewTransaction {
   date: string
@@ -24,11 +25,12 @@ interface ImportPreviewProps {
   bankType: BankType
   incomeSkipped: number
   internalSkipped: number
+  skippedTransactions: SkippedTransaction[]
   onConfirm: (transactions: PreviewTransaction[]) => void
   onCancel: () => void
 }
 
-type Filter = 'all' | 'uncategorised' | 'ai-suggested' | 'categorised'
+type Filter = 'all' | 'uncategorised' | 'ai-suggested' | 'categorised' | 'income-skipped' | 'internal-skipped'
 
 export function ImportPreview({
   transactions: initialTransactions,
@@ -36,6 +38,7 @@ export function ImportPreview({
   bankType,
   incomeSkipped,
   internalSkipped,
+  skippedTransactions,
   onConfirm,
   onCancel,
 }: ImportPreviewProps) {
@@ -140,19 +143,64 @@ export function ImportPreview({
           >
             {categorised} categorised
           </button>
-          <span className="rounded-full px-3 py-1 bg-muted/50 text-muted-foreground">
-            {incomeSkipped} income skipped
-          </span>
+          {incomeSkipped > 0 && (
+            <button
+              type="button"
+              onClick={() => setFilter('income-skipped')}
+              className={cn(
+                'rounded-full px-3 py-1 transition-colors',
+                filter === 'income-skipped'
+                  ? 'bg-muted text-foreground'
+                  : 'bg-muted/50 text-muted-foreground hover:bg-muted/70',
+              )}
+            >
+              {incomeSkipped} income skipped
+            </button>
+          )}
           {internalSkipped > 0 && (
-            <span className="rounded-full px-3 py-1 bg-muted/50 text-muted-foreground">
+            <button
+              type="button"
+              onClick={() => setFilter('internal-skipped')}
+              className={cn(
+                'rounded-full px-3 py-1 transition-colors',
+                filter === 'internal-skipped'
+                  ? 'bg-muted text-foreground'
+                  : 'bg-muted/50 text-muted-foreground hover:bg-muted/70',
+              )}
+            >
               {internalSkipped} internal skipped
-            </span>
+            </button>
           )}
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto space-y-2" style={{ maxHeight: 'calc(100vh - 320px)' }}>
-        {filteredWithIndex.length === 0 ? (
+        {(filter === 'income-skipped' || filter === 'internal-skipped') ? (
+          (() => {
+            const reason = filter === 'income-skipped' ? 'income' : 'internal'
+            const items = skippedTransactions.filter((s) => s.reason === reason)
+            return items.length === 0 ? (
+              <div className="rounded-lg bg-card border border-border p-8 text-center text-muted-foreground">
+                No transactions match this filter.
+              </div>
+            ) : (
+              items.map((s, i) => (
+                <div key={`skipped-${i}`} className="rounded-lg bg-card p-3 border border-border opacity-60">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{s.description}</p>
+                      <p className="text-xs text-muted-foreground">{formatDate(s.date)}</p>
+                    </div>
+                    <div className="text-right ml-2">
+                      <p className="font-semibold text-sm">{formatCurrency(s.amount)}</p>
+                      <p className="text-xs text-muted-foreground">{s.reason}</p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )
+          })()
+        ) : filteredWithIndex.length === 0 ? (
           <div className="rounded-lg bg-card border border-border p-8 text-center text-muted-foreground">
             No transactions match this filter.
           </div>
