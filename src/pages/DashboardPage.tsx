@@ -11,6 +11,7 @@ import { BudgetVsActual } from '@/components/dashboard/BudgetVsActual'
 import { SpecialsSection } from '@/components/dashboard/SpecialsSection'
 import { MonthlySummary } from '@/components/dashboard/MonthlySummary'
 import { NeedsReview } from '@/components/dashboard/NeedsReview'
+import { YearToDate } from '@/components/dashboard/YearToDate'
 
 export default function DashboardPage() {
   const taxYear = getCurrentTaxYear()
@@ -129,6 +130,13 @@ export default function DashboardPage() {
       <BudgetVsActual
         month={selectedM.month}
         year={selectedM.year}
+        taxYear={taxYear}
+        householdId={householdId}
+        leftToLiveOn={payDayResult?.leftToLiveOn ?? 0}
+      />
+
+      {/* Year to Date */}
+      <YearToDate
         taxYear={taxYear}
         householdId={householdId}
         leftToLiveOn={payDayResult?.leftToLiveOn ?? 0}
