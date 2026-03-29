@@ -27,8 +27,12 @@ export function parseRevolutCSV(csvText: string): ParseResult {
     // Skip Revolut internal operations
     if (
       descLower.startsWith('pocket') ||
+      descLower.startsWith('to pocket') ||
+      descLower.startsWith('from pocket') ||
       descLower.includes('savings vault') ||
       descLower.includes('round up') ||
+      descLower.includes('to gbp') ||
+      descLower.includes('from gbp') ||
       (type === 'transfer' && (descLower.includes('to ') && descLower.includes('account')))
     ) {
       internalSkipped++

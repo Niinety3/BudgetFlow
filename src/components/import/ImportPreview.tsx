@@ -88,7 +88,7 @@ export function ImportPreview({
         </div>
       </div>
 
-      <div className="max-h-96 overflow-y-auto space-y-2">
+      <div className="flex-1 overflow-y-auto space-y-2" style={{ maxHeight: 'calc(100vh - 280px)' }}>
         {transactions.map((txn, i) => (
           <div
             key={`${txn.date}-${txn.description}-${i}`}
