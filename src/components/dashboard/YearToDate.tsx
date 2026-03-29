@@ -14,7 +14,9 @@ export function YearToDate({ taxYear, householdId, leftToLiveOn }: YearToDatePro
   const { limits } = useBudgetLimits(taxYear, householdId)
   const { categories } = useCategories()
 
-  const budgetCategories = categories.filter((c) => c.is_budget_category)
+  const budgetCategories = categories.filter(
+    (c) => c.is_budget_category && c.name !== 'Rent / Mortgage',
+  )
 
   // Figure out how many months have data
   const monthsWithData = new Set(

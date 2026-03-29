@@ -7,9 +7,10 @@ interface PayDayBreakdownProps {
 
 export default function PayDayBreakdown({ result }: PayDayBreakdownProps) {
   const lines = [
-    { label: '1. Tax set-aside', value: result.taxSetAside, negative: true },
-    { label: '2. Savings (% of after-tax)', value: result.savingsAmount, negative: true },
-    { label: '3. Rent gap', value: result.rentGap, negative: true },
+    { label: '1. Tax set-aside', value: result.taxSetAside },
+    { label: '2. Savings (% of after-tax)', value: result.savingsAmount },
+    { label: '3. Rent gap', value: result.rentGap },
+    { label: '4. Current rent', value: result.currentRent },
   ]
 
   return (
@@ -26,22 +27,21 @@ export default function PayDayBreakdown({ result }: PayDayBreakdownProps) {
 
       {/* Deductions */}
       <div className="space-y-2">
-        {lines.map(({ label, value, negative }) => (
+        {lines.map(({ label, value }) => (
           <div key={label} className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">{label}</span>
             <span className="text-sm text-card-foreground">
-              {negative ? '- ' : ''}
-              {formatCurrency(value)}
+              - {formatCurrency(value)}
             </span>
           </div>
         ))}
       </div>
 
-      {/* Total to savings */}
+      {/* Total deductions */}
       <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
-        <span className="text-sm font-medium text-muted-foreground">Total to savings</span>
+        <span className="text-sm font-medium text-muted-foreground">Total deductions</span>
         <span className="text-sm font-semibold text-card-foreground">
-          {formatCurrency(result.totalToSavings)}
+          {formatCurrency(result.totalDeductions)}
         </span>
       </div>
 

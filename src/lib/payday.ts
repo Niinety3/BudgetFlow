@@ -12,8 +12,9 @@ export interface PayDayResult {
   afterTax: number
   savingsAmount: number       // savingsPct% of afterTax
   rentGap: number             // max(futureRent - currentRent, 0)
-  totalToSavings: number      // tax + savings + rentGap
-  leftToLiveOn: number        // grossPay - totalToSavings
+  currentRent: number         // fixed monthly rent
+  totalDeductions: number     // tax + savings + rentGap + currentRent
+  leftToLiveOn: number        // grossPay - totalDeductions
 }
 
 function round2(value: number): number {
@@ -28,8 +29,8 @@ export function calculatePayDay(input: PayDayInput): PayDayResult {
   const afterTax = round2(grossPay - taxSetAside)
   const savingsAmount = round2(afterTax * (savingsPct / 100))
   const rentGap = round2(Math.max(futureRent - currentRent, 0))
-  const totalToSavings = round2(taxSetAside + savingsAmount + rentGap)
-  const leftToLiveOn = round2(grossPay - totalToSavings)
+  const totalDeductions = round2(taxSetAside + savingsAmount + rentGap + currentRent)
+  const leftToLiveOn = round2(grossPay - totalDeductions)
 
   return {
     grossPay,
@@ -37,7 +38,8 @@ export function calculatePayDay(input: PayDayInput): PayDayResult {
     afterTax,
     savingsAmount,
     rentGap,
-    totalToSavings,
+    currentRent: round2(currentRent),
+    totalDeductions,
     leftToLiveOn,
   }
 }

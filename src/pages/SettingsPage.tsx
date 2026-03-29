@@ -112,7 +112,8 @@ function PayDaySummary({ values }: { values: SettingsFormValues }) {
     { label: 'Tax set-aside', value: payResult.taxSetAside },
     { label: 'Savings', value: payResult.savingsAmount },
     { label: 'Rent gap', value: payResult.rentGap },
-    { label: 'Total to savings', value: payResult.totalToSavings },
+    { label: 'Current rent', value: payResult.currentRent },
+    { label: 'Total deductions', value: payResult.totalDeductions },
   ]
 
   return (

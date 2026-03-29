@@ -24,7 +24,9 @@ export function BudgetVsActual({
   const { limits, updateLimit } = useBudgetLimits(taxYear, householdId)
   const { categories } = useCategories()
 
-  const budgetCategories = categories.filter((c) => c.is_budget_category)
+  const budgetCategories = categories.filter(
+    (c) => c.is_budget_category && c.name !== 'Rent / Mortgage',
+  )
 
   // Sum actual spending per category for this month
   const actualByCategory: Record<string, number> = {}
