@@ -106,13 +106,13 @@ export function BudgetVsActual({
     <div className="rounded-lg bg-card border border-border overflow-hidden">
       <div className="p-4 border-b border-border flex items-center justify-between">
         <h3 className="font-semibold">Budget vs Actual</h3>
-        {!hasAnyBudgets && allTaxYearTxns.length > 0 && (
+        {allTaxYearTxns.length > 0 && (
           <button
             type="button"
             onClick={autoGenerateBudgets}
             className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
           >
-            Auto-set budgets
+            {hasAnyBudgets ? 'Recalculate' : 'Auto-set budgets'}
           </button>
         )}
       </div>
