@@ -31,6 +31,13 @@ export function parseRevolutCSV(csvText: string): ParseResult {
       continue
     }
 
+    // Skip PayPal payments (imported separately via PayPal CSV with actual merchant names)
+    if (descLower.includes('paypal payment') || descLower.includes('paypal *')) {
+      internalSkipped++
+      skippedTransactions.push({ date, description, amount: Math.abs(amount), reason: 'internal' })
+      continue
+    }
+
     // Skip Revolut internal operations
     if (
       descLower.startsWith('pocket') ||

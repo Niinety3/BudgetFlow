@@ -10,6 +10,7 @@ export function parseNatWestCSV(csvText: string): ParseResult {
   const transactions: ParseResult['transactions'] = []
   const skippedTransactions: SkippedTransaction[] = []
   let incomeSkipped = 0
+  let internalSkipped = 0
 
   for (const row of parsed.data) {
     const value = parseFloat(row['Value'] ?? '0')
@@ -25,6 +26,14 @@ export function parseNatWestCSV(csvText: string): ParseResult {
       continue
     }
 
+    // Skip PayPal payments (imported separately via PayPal CSV with actual merchant names)
+    const descLower = description.toLowerCase()
+    if (descLower.includes('paypal payment') || descLower.includes('paypal *')) {
+      internalSkipped++
+      skippedTransactions.push({ date, description, amount: Math.abs(value), reason: 'internal' })
+      continue
+    }
+
     transactions.push({
       date,
       description,
@@ -33,7 +42,7 @@ export function parseNatWestCSV(csvText: string): ParseResult {
     })
   }
 
-  return { transactions, incomeSkipped, internalSkipped: 0, skippedTransactions }
+  return { transactions, incomeSkipped, internalSkipped, skippedTransactions }
 }
 
 function parseNatWestDate(raw: string): string {
