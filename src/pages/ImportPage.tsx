@@ -47,6 +47,7 @@ export default function ImportPage() {
     incomeSkipped: number
     internalSkipped: number
     skippedTransactions: SkippedTransaction[]
+    potentialRefunds: PotentialRefund[]
   } | null>(null)
   const [summaryData, setSummaryData] = useState({
     imported: 0,
@@ -72,8 +73,31 @@ export default function ImportPage() {
     const sortedRules = [...rules].sort((a, b) => b.priority - a.priority)
     const categoryNames = categories.map((c) => c.name)
 
+    // Filter out transactions that already exist in the database
+    let newTransactions = parsed.result.transactions
+    if (householdId) {
+      const { data: existing } = await supabase
+        .from('transactions')
+        .select('date, description, amount')
+        .eq('household_id', householdId)
+
+      if (existing && existing.length > 0) {
+        const existingSet = new Set(
+          existing.map((e) => `${e.date}|${e.description}|${Number(e.amount).toFixed(2)}`),
+        )
+        const before = newTransactions.length
+        newTransactions = newTransactions.filter(
+          (t) => !existingSet.has(`${t.date}|${t.description}|${t.amount.toFixed(2)}`),
+        )
+        const dupsRemoved = before - newTransactions.length
+        if (dupsRemoved > 0) {
+          console.log(`Pre-filtered ${dupsRemoved} already-imported transactions`)
+        }
+      }
+    }
+
     // First pass: apply keyword rules
-    const transactions: PreviewTransaction[] = parsed.result.transactions.map(
+    const transactions: PreviewTransaction[] = newTransactions.map(
       (t) => ({
         ...t,
         category_id: categoriseTransaction(t.description, sortedRules),
@@ -125,9 +149,24 @@ export default function ImportPage() {
       }
     }
 
-    // Match potential refunds against existing transactions in the database
-    // Only show refunds that match an existing expense by EXACT description AND exact or similar amount
-    const refunds = parsed.result.potentialRefunds ?? []
+    // Store potential refunds for later opt-in matching
+    const refundsToStore = parsed.result.potentialRefunds ?? []
+
+    setPreviewData({
+      transactions,
+      bankType: parsed.bankType,
+      incomeSkipped: parsed.result.incomeSkipped,
+      internalSkipped: parsed.result.internalSkipped,
+      skippedTransactions: parsed.result.skippedTransactions,
+      potentialRefunds: refundsToStore,
+    })
+    setMatchedRefunds([])
+    setStep('preview')
+  }
+
+  async function checkForRefunds() {
+    if (!householdId || !previewData?.potentialRefunds) return
+    const refunds = previewData.potentialRefunds
     const matched: MatchedRefund[] = []
     if (refunds.length > 0 && householdId) {
       for (const refund of refunds) {
@@ -182,15 +221,6 @@ export default function ImportPage() {
       }
     }
     setMatchedRefunds(matched)
-
-    setPreviewData({
-      transactions,
-      bankType: parsed.bankType,
-      incomeSkipped: parsed.result.incomeSkipped,
-      internalSkipped: parsed.result.internalSkipped,
-      skippedTransactions: parsed.result.skippedTransactions,
-    })
-    setStep('preview')
   }
 
   async function handleConfirm(transactions: PreviewTransaction[]) {
@@ -345,10 +375,22 @@ export default function ImportPage() {
               Importing transactions...
             </div>
           )}
+          {/* Refund matching - opt-in */}
+          {matchedRefunds.length === 0 && (previewData.potentialRefunds?.length ?? 0) > 0 && (
+            <div className="mb-4">
+              <button
+                type="button"
+                onClick={checkForRefunds}
+                className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted"
+              >
+                Check for refunds ({previewData.potentialRefunds.length} potential)
+              </button>
+            </div>
+          )}
           {matchedRefunds.length > 0 && (
             <div className="mb-4 rounded-lg border border-warning/50 bg-warning/10 p-4 space-y-3">
               <h3 className="font-semibold text-sm">
-                {matchedRefunds.filter((r) => r.status === 'pending').length} potential refund{matchedRefunds.filter((r) => r.status === 'pending').length !== 1 ? 's' : ''} found
+                {matchedRefunds.filter((r) => r.status === 'pending').length} refund{matchedRefunds.filter((r) => r.status === 'pending').length !== 1 ? 's' : ''} matched
               </h3>
               {matchedRefunds.map((mr, i) => (
                 <div key={i} className="rounded-lg bg-card border border-border p-3">
