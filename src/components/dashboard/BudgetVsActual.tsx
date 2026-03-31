@@ -1,7 +1,9 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useAllTransactionsForTaxYear } from '@/hooks/useTransactions'
 import { useBudgetLimits } from '@/hooks/useBudgetLimits'
 import { useCategories } from '@/hooks/useCategories'
+import { supabase } from '@/lib/supabase'
 import { useState } from 'react'
 import { formatCurrency, cn } from '@/lib/utils'
 
@@ -20,9 +22,10 @@ export function BudgetVsActual({
   householdId,
   leftToLiveOn,
 }: BudgetVsActualProps) {
+  const queryClient = useQueryClient()
   const { transactions } = useTransactions(month, year, householdId)
   const { transactions: allTaxYearTxns } = useAllTransactionsForTaxYear(taxYear, householdId)
-  const { limits, updateLimit } = useBudgetLimits(taxYear, householdId)
+  const { limits } = useBudgetLimits(taxYear, householdId)
   const { categories } = useCategories()
 
   const excludedCategories = ['Rent / Mortgage', 'Utilities', 'Annual Costs']
@@ -75,6 +78,7 @@ export function BudgetVsActual({
 
   // Auto-generate budgets: average spending scaled to fit leftToLiveOn
   async function autoGenerateBudgets() {
+    if (!householdId) return
     setCalculating(true)
     try {
       const totalAvg = budgetCategories.reduce(
@@ -82,24 +86,52 @@ export function BudgetVsActual({
         0,
       )
 
-      console.log('Auto-budget: totalAvg', totalAvg, 'leftToLiveOn', leftToLiveOn, 'categories', budgetCategories.length, 'txns', allTaxYearTxns.length)
+      // Delete existing limits for this month, then insert fresh
+      const { error: deleteError } = await supabase
+        .from('budget_limits')
+        .delete()
+        .eq('household_id', householdId)
+        .eq('tax_year', taxYear)
+        .eq('month', month)
 
-      if (totalAvg === 0) {
-        console.warn('Auto-budget: no spending data found')
-        setCalculating(false)
-        return
+      if (deleteError) console.error('Delete error:', deleteError)
+
+      let inserts: { household_id: string; category_id: string; tax_year: number; month: number; amount: number }[]
+
+      if (totalAvg > 0) {
+        // Scale averages to fit leftToLiveOn
+        const scaleFactor = leftToLiveOn / totalAvg
+        inserts = budgetCategories
+          .filter((cat) => (avgByCategory[cat.id] ?? 0) > 0)
+          .map((cat) => ({
+            household_id: householdId,
+            category_id: cat.id,
+            tax_year: taxYear,
+            month,
+            amount: Math.round((avgByCategory[cat.id] ?? 0) * scaleFactor),
+          }))
+      } else {
+        // No transaction data — distribute evenly
+        const perCategory = Math.round(leftToLiveOn / budgetCategories.length)
+        inserts = budgetCategories.map((cat) => ({
+          household_id: householdId,
+          category_id: cat.id,
+          tax_year: taxYear,
+          month,
+          amount: perCategory,
+        }))
       }
 
-      const scaleFactor = leftToLiveOn / totalAvg
+      if (inserts.length > 0) {
+        const { error: insertError } = await supabase
+          .from('budget_limits')
+          .insert(inserts)
 
-      for (const cat of budgetCategories) {
-        const avg = avgByCategory[cat.id] ?? 0
-        if (avg > 0) {
-          const scaledBudget = Math.round(avg * scaleFactor)
-          console.log(`Auto-budget: ${cat.name} avg=${avg} scaled=${scaledBudget}`)
-          await updateLimit({ categoryId: cat.id, month, amount: scaledBudget })
-        }
+        if (insertError) console.error('Insert error:', insertError)
       }
+
+      // Refresh the query
+      queryClient.invalidateQueries({ queryKey: ['budget-limits', householdId, taxYear] })
     } catch (err) {
       console.error('Auto-budget error:', err)
     } finally {
@@ -123,7 +155,7 @@ export function BudgetVsActual({
     <div className="rounded-lg bg-card border border-border overflow-hidden">
       <div className="p-4 border-b border-border flex items-center justify-between">
         <h3 className="font-semibold">Budget vs Actual</h3>
-        {allTaxYearTxns.length > 0 && (
+        {(allTaxYearTxns.length > 0 || !hasAnyBudgets) && (
           <button
             type="button"
             onClick={autoGenerateBudgets}
