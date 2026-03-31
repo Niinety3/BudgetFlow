@@ -18,10 +18,17 @@ export function YearToDate({ taxYear, householdId, leftToLiveOn }: YearToDatePro
   const budgetCategories = categories.filter(
     (c) => c.is_budget_category && !excludedCategories.includes(c.name),
   )
+  const budgetCatIds = new Set(budgetCategories.map((c) => c.id))
 
-  // Figure out how many months have data
+  // Figure out how many months have budget-category spending
   const monthsWithData = new Set(
-    transactions.map((t) => (t as Record<string, unknown>).date?.toString().slice(0, 7)),
+    transactions
+      .filter((t) => {
+        const tx = t as Record<string, unknown>
+        const cat = tx.categories as { name: string; is_budget_category: boolean } | null
+        return cat?.is_budget_category && !excludedCategories.includes(cat?.name ?? '') && tx.category_id
+      })
+      .map((t) => (t as Record<string, unknown>).date?.toString().slice(0, 7)),
   ).size
 
   if (monthsWithData === 0) return null
@@ -37,11 +44,23 @@ export function YearToDate({ taxYear, householdId, leftToLiveOn }: YearToDatePro
     }
   }
 
-  // YTD budget per category (sum across months that have limits set)
+  // Only count budget limits for months that actually have transaction data
+  const monthsWithDataSet = new Set(
+    transactions
+      .filter((t) => {
+        const tx = t as Record<string, unknown>
+        const cat = tx.categories as { name: string; is_budget_category: boolean } | null
+        return cat?.is_budget_category && !excludedCategories.includes(cat?.name ?? '') && tx.category_id
+      })
+      .map((t) => Number((t as Record<string, unknown>).date?.toString().slice(5, 7))),
+  )
+
   const ytdBudget: Record<string, number> = {}
   for (const limit of limits) {
-    ytdBudget[limit.category_id] =
-      (ytdBudget[limit.category_id] ?? 0) + Number(limit.amount)
+    if (monthsWithDataSet.has(limit.month) && budgetCatIds.has(limit.category_id)) {
+      ytdBudget[limit.category_id] =
+        (ytdBudget[limit.category_id] ?? 0) + Number(limit.amount)
+    }
   }
 
   // If no budgets set, use leftToLiveOn * monthsWithData as total budget
