@@ -20,15 +20,9 @@ export function YearToDate({ taxYear, householdId, leftToLiveOn }: YearToDatePro
   )
   const budgetCatIds = new Set(budgetCategories.map((c) => c.id))
 
-  // Figure out how many months have budget-category spending
+  // Figure out how many months have ANY transaction data
   const monthsWithData = new Set(
-    transactions
-      .filter((t) => {
-        const tx = t as Record<string, unknown>
-        const cat = tx.categories as { name: string; is_budget_category: boolean } | null
-        return cat?.is_budget_category && !excludedCategories.includes(cat?.name ?? '') && tx.category_id
-      })
-      .map((t) => (t as Record<string, unknown>).date?.toString().slice(0, 7)),
+    transactions.map((t) => (t as Record<string, unknown>).date?.toString().slice(0, 7)),
   ).size
 
   if (monthsWithData === 0) return null
@@ -44,20 +38,17 @@ export function YearToDate({ taxYear, householdId, leftToLiveOn }: YearToDatePro
     }
   }
 
-  // Only count budget limits for months that actually have transaction data
-  const monthsWithDataSet = new Set(
-    transactions
-      .filter((t) => {
-        const tx = t as Record<string, unknown>
-        const cat = tx.categories as { name: string; is_budget_category: boolean } | null
-        return cat?.is_budget_category && !excludedCategories.includes(cat?.name ?? '') && tx.category_id
-      })
-      .map((t) => Number((t as Record<string, unknown>).date?.toString().slice(5, 7))),
+  // Only count budget limits for months that have transaction data
+  const monthNumbers = new Set(
+    transactions.map((t) => {
+      const dateStr = (t as Record<string, unknown>).date?.toString() ?? ''
+      return parseInt(dateStr.slice(5, 7), 10)
+    }),
   )
 
   const ytdBudget: Record<string, number> = {}
   for (const limit of limits) {
-    if (monthsWithDataSet.has(limit.month) && budgetCatIds.has(limit.category_id)) {
+    if (monthNumbers.has(limit.month) && budgetCatIds.has(limit.category_id)) {
       ytdBudget[limit.category_id] =
         (ytdBudget[limit.category_id] ?? 0) + Number(limit.amount)
     }
