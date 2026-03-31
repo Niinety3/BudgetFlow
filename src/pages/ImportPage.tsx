@@ -56,6 +56,8 @@ export default function ImportPage() {
     uncategorised: 0,
   })
   const [matchedRefunds, setMatchedRefunds] = useState<MatchedRefund[]>([])
+  const [refundCheckDone, setRefundCheckDone] = useState(false)
+  const [checkingRefunds, setCheckingRefunds] = useState(false)
   const [importing, setImporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [suggestProgress, setSuggestProgress] = useState({ done: 0, total: 0 })
@@ -166,6 +168,7 @@ export default function ImportPage() {
 
   async function checkForRefunds() {
     if (!householdId || !previewData?.potentialRefunds) return
+    setCheckingRefunds(true)
     const refunds = previewData.potentialRefunds
     const matched: MatchedRefund[] = []
     if (refunds.length > 0 && householdId) {
@@ -221,6 +224,8 @@ export default function ImportPage() {
       }
     }
     setMatchedRefunds(matched)
+    setRefundCheckDone(true)
+    setCheckingRefunds(false)
   }
 
   async function handleConfirm(transactions: PreviewTransaction[]) {
@@ -329,11 +334,15 @@ export default function ImportPage() {
 
   function handleCancel() {
     setPreviewData(null)
+    setMatchedRefunds([])
+    setRefundCheckDone(false)
     setStep('upload')
   }
 
   function handleImportAnother() {
     setPreviewData(null)
+    setMatchedRefunds([])
+    setRefundCheckDone(false)
     setSummaryData({ imported: 0, duplicatesSkipped: 0, incomeSkipped: 0, uncategorised: 0 })
     setStep('upload')
   }
@@ -376,15 +385,21 @@ export default function ImportPage() {
             </div>
           )}
           {/* Refund matching - opt-in */}
-          {matchedRefunds.length === 0 && (previewData.potentialRefunds?.length ?? 0) > 0 && (
+          {!refundCheckDone && (previewData.potentialRefunds?.length ?? 0) > 0 && (
             <div className="mb-4">
               <button
                 type="button"
                 onClick={checkForRefunds}
-                className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted"
+                disabled={checkingRefunds}
+                className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"
               >
-                Check for refunds ({previewData.potentialRefunds.length} potential)
+                {checkingRefunds ? 'Checking...' : `Check for refunds (${previewData.potentialRefunds.length} potential)`}
               </button>
+            </div>
+          )}
+          {refundCheckDone && matchedRefunds.length === 0 && (
+            <div className="mb-4 rounded-lg bg-muted p-3 text-sm text-muted-foreground">
+              No matching refunds found.
             </div>
           )}
           {matchedRefunds.length > 0 && (
