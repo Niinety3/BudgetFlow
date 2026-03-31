@@ -164,6 +164,7 @@ export function useAllTransactionsForTaxYear(
         .gte('date', start.toISOString().slice(0, 10))
         .lte('date', end.toISOString().slice(0, 10))
         .order('date', { ascending: false })
+        .limit(5000)
 
       if (error) throw error
       return data ?? []
