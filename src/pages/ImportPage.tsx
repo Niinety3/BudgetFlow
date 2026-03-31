@@ -173,12 +173,18 @@ export default function ImportPage() {
     const matched: MatchedRefund[] = []
     if (refunds.length > 0 && householdId) {
       for (const refund of refunds) {
-        // Look for exact description match with exact amount, before the refund date
+        // Extract first meaningful word(s) for fuzzy matching
+        // e.g. "TESCO STORES 1234" → search for "%TESCO%"
+        const words = refund.description.trim().split(/\s+/)
+        const keyword = words[0] ?? ''
+        if (keyword.length < 3) continue // skip very short descriptions
+
+        // Search by keyword match + exact amount
         const { data: exactMatches } = await supabase
           .from('transactions')
           .select('id, date, description, amount')
           .eq('household_id', householdId)
-          .eq('description', refund.description)
+          .ilike('description', `%${keyword}%`)
           .eq('amount', refund.amount)
           .lte('date', refund.date)
           .order('date', { ascending: false })
@@ -198,12 +204,12 @@ export default function ImportPage() {
           continue
         }
 
-        // Look for exact description match with larger amount (partial refund), before the refund date
+        // Search by keyword match + larger amount (partial refund)
         const { data: partialMatches } = await supabase
           .from('transactions')
           .select('id, date, description, amount')
           .eq('household_id', householdId)
-          .eq('description', refund.description)
+          .ilike('description', `%${keyword}%`)
           .gte('amount', refund.amount)
           .lte('date', refund.date)
           .order('date', { ascending: false })
