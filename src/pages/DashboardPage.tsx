@@ -14,7 +14,8 @@ import { NeedsReview } from '@/components/dashboard/NeedsReview'
 import { YearToDate } from '@/components/dashboard/YearToDate'
 
 export default function DashboardPage() {
-  const taxYear = getCurrentTaxYear()
+  const currentTaxYr = getCurrentTaxYear()
+  const [taxYear, setTaxYear] = useState(currentTaxYr)
   const months = getTaxYearMonths(taxYear)
   const now = new Date()
   const currentMonth = now.getMonth() + 1
@@ -81,9 +82,30 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">Tax Year {formatTaxYear(taxYear)}</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">Tax Year {formatTaxYear(taxYear)}</p>
+        </div>
+        <div className="flex gap-1">
+          {[currentTaxYr - 1, currentTaxYr, currentTaxYr + 1].map((yr) => (
+            <button
+              key={yr}
+              onClick={() => {
+                setTaxYear(yr)
+                setSelectedMonth(0)
+              }}
+              className={cn(
+                'rounded-lg px-3 py-1.5 text-xs font-medium transition-colors',
+                yr === taxYear
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80',
+              )}
+            >
+              {formatTaxYear(yr)}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Needs Review */}

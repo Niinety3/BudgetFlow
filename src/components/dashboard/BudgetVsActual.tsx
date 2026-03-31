@@ -71,7 +71,7 @@ export function BudgetVsActual({
   const hasAnyBudgets = limits.some((l) => l.month === month && Number(l.amount) > 0)
 
   // Auto-generate budgets: average spending scaled to fit leftToLiveOn
-  function autoGenerateBudgets() {
+  async function autoGenerateBudgets() {
     const totalAvg = budgetCategories.reduce(
       (sum, cat) => sum + (avgByCategory[cat.id] ?? 0),
       0,
@@ -85,7 +85,7 @@ export function BudgetVsActual({
       const avg = avgByCategory[cat.id] ?? 0
       if (avg > 0) {
         const scaledBudget = Math.round(avg * scaleFactor)
-        updateLimit({ categoryId: cat.id, month, amount: scaledBudget })
+        await updateLimit({ categoryId: cat.id, month, amount: scaledBudget })
       }
     }
   }
