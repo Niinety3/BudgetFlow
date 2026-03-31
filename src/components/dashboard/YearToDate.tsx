@@ -80,7 +80,7 @@ export function YearToDate({ taxYear, householdId, leftToLiveOn }: YearToDatePro
       <div className="p-4 border-b border-border">
         <h3 className="font-semibold">Year to Date</h3>
         <p className="text-xs text-muted-foreground">
-          {monthsWithData} month{monthsWithData > 1 ? 's' : ''} of data
+          {monthsWithData} month{monthsWithData > 1 ? 's' : ''} of data ({transactions.length} transactions)
         </p>
       </div>
 
