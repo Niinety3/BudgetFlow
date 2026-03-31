@@ -131,13 +131,14 @@ export default function ImportPage() {
     const matched: MatchedRefund[] = []
     if (refunds.length > 0 && householdId) {
       for (const refund of refunds) {
-        // Look for exact description match with exact amount
+        // Look for exact description match with exact amount, before the refund date
         const { data: exactMatches } = await supabase
           .from('transactions')
           .select('id, date, description, amount')
           .eq('household_id', householdId)
           .eq('description', refund.description)
           .eq('amount', refund.amount)
+          .lte('date', refund.date)
           .order('date', { ascending: false })
           .limit(1)
 
@@ -155,13 +156,14 @@ export default function ImportPage() {
           continue
         }
 
-        // Look for exact description match with any amount (partial refund)
+        // Look for exact description match with larger amount (partial refund), before the refund date
         const { data: partialMatches } = await supabase
           .from('transactions')
           .select('id, date, description, amount')
           .eq('household_id', householdId)
           .eq('description', refund.description)
           .gte('amount', refund.amount)
+          .lte('date', refund.date)
           .order('date', { ascending: false })
           .limit(1)
 
