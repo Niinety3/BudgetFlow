@@ -2,6 +2,7 @@ import { useTransactions } from '@/hooks/useTransactions'
 import { useAllTransactionsForTaxYear } from '@/hooks/useTransactions'
 import { useBudgetLimits } from '@/hooks/useBudgetLimits'
 import { useCategories } from '@/hooks/useCategories'
+import { useState } from 'react'
 import { formatCurrency, cn } from '@/lib/utils'
 
 interface BudgetVsActualProps {
@@ -70,23 +71,39 @@ export function BudgetVsActual({
   // Check if any budgets are set for this month
   const hasAnyBudgets = limits.some((l) => l.month === month && Number(l.amount) > 0)
 
+  const [calculating, setCalculating] = useState(false)
+
   // Auto-generate budgets: average spending scaled to fit leftToLiveOn
   async function autoGenerateBudgets() {
-    const totalAvg = budgetCategories.reduce(
-      (sum, cat) => sum + (avgByCategory[cat.id] ?? 0),
-      0,
-    )
+    setCalculating(true)
+    try {
+      const totalAvg = budgetCategories.reduce(
+        (sum, cat) => sum + (avgByCategory[cat.id] ?? 0),
+        0,
+      )
 
-    if (totalAvg === 0) return
+      console.log('Auto-budget: totalAvg', totalAvg, 'leftToLiveOn', leftToLiveOn, 'categories', budgetCategories.length, 'txns', allTaxYearTxns.length)
 
-    const scaleFactor = leftToLiveOn / totalAvg
-
-    for (const cat of budgetCategories) {
-      const avg = avgByCategory[cat.id] ?? 0
-      if (avg > 0) {
-        const scaledBudget = Math.round(avg * scaleFactor)
-        await updateLimit({ categoryId: cat.id, month, amount: scaledBudget })
+      if (totalAvg === 0) {
+        console.warn('Auto-budget: no spending data found')
+        setCalculating(false)
+        return
       }
+
+      const scaleFactor = leftToLiveOn / totalAvg
+
+      for (const cat of budgetCategories) {
+        const avg = avgByCategory[cat.id] ?? 0
+        if (avg > 0) {
+          const scaledBudget = Math.round(avg * scaleFactor)
+          console.log(`Auto-budget: ${cat.name} avg=${avg} scaled=${scaledBudget}`)
+          await updateLimit({ categoryId: cat.id, month, amount: scaledBudget })
+        }
+      }
+    } catch (err) {
+      console.error('Auto-budget error:', err)
+    } finally {
+      setCalculating(false)
     }
   }
 
@@ -110,9 +127,13 @@ export function BudgetVsActual({
           <button
             type="button"
             onClick={autoGenerateBudgets}
-            className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+            disabled={calculating}
+            className={cn(
+              'rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground',
+              calculating ? 'opacity-50 cursor-not-allowed' : 'hover:bg-primary/90',
+            )}
           >
-            {hasAnyBudgets ? 'Recalculate' : 'Auto-set budgets'}
+            {calculating ? 'Calculating...' : hasAnyBudgets ? 'Recalculate' : 'Auto-set budgets'}
           </button>
         )}
       </div>
