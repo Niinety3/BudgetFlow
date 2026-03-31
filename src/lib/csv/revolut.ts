@@ -56,11 +56,8 @@ export function parseRevolutCSV(csvText: string): ParseResult {
     }
 
     if (amount >= 0) {
-      // Check if this looks like a refund (from a merchant, not a salary/transfer)
-      const isLikelyRefund = type === 'card_payment' || type === 'refund' ||
-        (description && !descLower.includes('salary') && !descLower.includes('transfer') &&
-         !descLower.includes('top up') && !descLower.includes('from ') && amount < 500)
-      if (isLikelyRefund && description) {
+      // Collect all positive amounts — matching against DB happens later
+      if (description) {
         potentialRefunds.push({ date, description, amount, source: 'revolut' })
       }
       incomeSkipped++

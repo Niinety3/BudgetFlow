@@ -22,13 +22,7 @@ export function parseNatWestCSV(csvText: string): ParseResult {
     const description = (row['Description'] ?? '').trim()
 
     if (value >= 0) {
-      // Check if this looks like a refund
-      const descLowerCheck = description.toLowerCase()
-      const isLikelyRefund = description &&
-        !descLowerCheck.includes('salary') && !descLowerCheck.includes('wages') &&
-        !descLowerCheck.includes('transfer') && !descLowerCheck.includes('interest') &&
-        value < 500
-      if (isLikelyRefund) {
+      if (description) {
         potentialRefunds.push({ date, description, amount: value, source: 'natwest' })
       }
       incomeSkipped++

@@ -126,29 +126,53 @@ export default function ImportPage() {
     }
 
     // Match potential refunds against existing transactions in the database
+    // Only show refunds that match an existing expense by EXACT description AND exact or similar amount
     const refunds = parsed.result.potentialRefunds ?? []
     const matched: MatchedRefund[] = []
     if (refunds.length > 0 && householdId) {
       for (const refund of refunds) {
-        const { data: matches } = await supabase
+        // Look for exact description match with exact amount
+        const { data: exactMatches } = await supabase
           .from('transactions')
           .select('id, date, description, amount')
           .eq('household_id', householdId)
-          .ilike('description', `%${refund.description}%`)
+          .eq('description', refund.description)
+          .eq('amount', refund.amount)
           .order('date', { ascending: false })
-          .limit(5)
+          .limit(1)
 
-        if (matches && matches.length > 0) {
-          // Find the best match — prefer same amount, then closest amount
-          const exactMatch = matches.find((m) => Math.abs(Number(m.amount) - refund.amount) < 0.01)
-          const bestMatch = exactMatch ?? matches[0]
+        if (exactMatches && exactMatches.length > 0) {
           matched.push({
             refund,
             matchedTransaction: {
-              id: bestMatch.id,
-              date: bestMatch.date,
-              description: bestMatch.description,
-              amount: Number(bestMatch.amount),
+              id: exactMatches[0].id,
+              date: exactMatches[0].date,
+              description: exactMatches[0].description,
+              amount: Number(exactMatches[0].amount),
+            },
+            status: 'pending',
+          })
+          continue
+        }
+
+        // Look for exact description match with any amount (partial refund)
+        const { data: partialMatches } = await supabase
+          .from('transactions')
+          .select('id, date, description, amount')
+          .eq('household_id', householdId)
+          .eq('description', refund.description)
+          .gte('amount', refund.amount)
+          .order('date', { ascending: false })
+          .limit(1)
+
+        if (partialMatches && partialMatches.length > 0) {
+          matched.push({
+            refund,
+            matchedTransaction: {
+              id: partialMatches[0].id,
+              date: partialMatches[0].date,
+              description: partialMatches[0].description,
+              amount: Number(partialMatches[0].amount),
             },
             status: 'pending',
           })

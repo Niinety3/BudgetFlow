@@ -46,9 +46,7 @@ export function parsePayPalCSV(csvText: string): ParseResult {
 
     // Positive = incoming money
     if (gross >= 0) {
-      const isLikelyRefund = type.includes('refund') || type.includes('reversal') ||
-        (description && !type.includes('transfer') && !type.includes('withdraw') && gross < 500)
-      if (isLikelyRefund && description) {
+      if (description) {
         potentialRefunds.push({ date, description, amount: gross, source: 'paypal' })
       }
       incomeSkipped++
