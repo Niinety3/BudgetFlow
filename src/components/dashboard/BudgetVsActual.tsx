@@ -25,6 +25,7 @@ export function BudgetVsActual({
   const queryClient = useQueryClient()
   const { transactions } = useTransactions(month, year, householdId)
   const { transactions: allTaxYearTxns } = useAllTransactionsForTaxYear(taxYear, householdId)
+  const { transactions: prevTaxYearTxns } = useAllTransactionsForTaxYear(taxYear - 1, householdId)
   const { limits } = useBudgetLimits(taxYear, householdId)
   const { categories } = useCategories()
 
@@ -42,25 +43,36 @@ export function BudgetVsActual({
     }
   }
 
-  // Calculate average spending per category across all months with data
+  // Calculate average spending per category
+  // Use current tax year if it has enough data (3+ months), otherwise fall back to previous year
   const avgByCategory: Record<string, number> = {}
-  if (allTaxYearTxns.length > 0) {
+  function calcAverages(txns: typeof allTaxYearTxns) {
     const monthsWithData = new Set(
-      allTaxYearTxns.map((t) => `${(t as Record<string, unknown>).date}`.slice(0, 7)),
+      txns.map((t) => `${(t as Record<string, unknown>).date}`.slice(0, 7)),
     ).size
-
-    if (monthsWithData > 0) {
-      const totalByCategory: Record<string, number> = {}
-      for (const txn of allTaxYearTxns) {
-        const catId = (txn as Record<string, unknown>).category_id as string | null
-        if (catId) {
-          totalByCategory[catId] = (totalByCategory[catId] ?? 0) + Number((txn as Record<string, unknown>).amount)
-        }
-      }
-      for (const [catId, total] of Object.entries(totalByCategory)) {
-        avgByCategory[catId] = total / monthsWithData
+    if (monthsWithData === 0) return
+    const totalByCategory: Record<string, number> = {}
+    for (const txn of txns) {
+      const catId = (txn as Record<string, unknown>).category_id as string | null
+      if (catId) {
+        totalByCategory[catId] = (totalByCategory[catId] ?? 0) + Number((txn as Record<string, unknown>).amount)
       }
     }
+    for (const [catId, total] of Object.entries(totalByCategory)) {
+      avgByCategory[catId] = total / monthsWithData
+    }
+  }
+
+  const currentYearMonths = new Set(
+    allTaxYearTxns.map((t) => `${(t as Record<string, unknown>).date}`.slice(0, 7)),
+  ).size
+
+  if (currentYearMonths >= 3) {
+    calcAverages(allTaxYearTxns)
+  } else if (prevTaxYearTxns.length > 0) {
+    calcAverages(prevTaxYearTxns)
+  } else {
+    calcAverages(allTaxYearTxns)
   }
 
   // Get budget limit for a category
