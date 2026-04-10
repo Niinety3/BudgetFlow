@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1007443169592",
+    "project_id": "budgetflow-3f079",
+    "storage_bucket": "budgetflow-3f079.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1007443169592:android:ea313ce60ef10be722f1cd",
+        "android_client_info": {
+          "package_name": "com.budgetflow.notifier"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCsOZWI1mFcOBm8fjBpjEU7XjMBqJ_Fpjw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

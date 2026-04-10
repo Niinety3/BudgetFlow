@@ -19,34 +19,6 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Create placeholder google-services.json
-        run: |
-          cat > android/app/google-services.json << 'GSEOF'
-          {
-            "project_info": {
-              "project_number": "000000000000",
-              "project_id": "budgetflow-placeholder",
-              "storage_bucket": "budgetflow-placeholder.appspot.com"
-            },
-            "client": [
-              {
-                "client_info": {
-                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000",
-                  "android_client_info": {
-                    "package_name": "com.budgetflow.notifier"
-                  }
-                },
-                "api_key": [
-                  {
-                    "current_key": "placeholder"
-                  }
-                ]
-              }
-            ],
-            "configuration_version": "1"
-          }
-          GSEOF
-
       - name: Generate Gradle wrapper
         working-directory: android
         run: gradle wrapper --gradle-version 8.11.1
