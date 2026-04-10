@@ -1,6 +1,8 @@
-import { useAllTransactionsForTaxYear } from '@/hooks/useTransactions'
+import { useQuery } from '@tanstack/react-query'
 import { useBudgetLimits } from '@/hooks/useBudgetLimits'
 import { useCategories } from '@/hooks/useCategories'
+import { supabase } from '@/lib/supabase'
+import { getTaxYearDateRange } from '@/lib/tax-year'
 import { formatCurrency, cn } from '@/lib/utils'
 
 interface YearToDateProps {
@@ -10,57 +12,82 @@ interface YearToDateProps {
 }
 
 export function YearToDate({ taxYear, householdId, leftToLiveOn }: YearToDateProps) {
-  const { transactions } = useAllTransactionsForTaxYear(taxYear, householdId)
   const { limits } = useBudgetLimits(taxYear, householdId)
   const { categories } = useCategories()
+  const { start, end } = getTaxYearDateRange(taxYear)
 
-  const excludedCategories = ['Rent / Mortgage', 'Utilities', 'Annual Costs']
+  const excludedCategories = ['Rent / Mortgage', 'Utilities', 'Annual Costs', 'Tax']
   const budgetCategories = categories.filter(
     (c) => c.is_budget_category && !excludedCategories.includes(c.name),
   )
   const budgetCatIds = new Set(budgetCategories.map((c) => c.id))
 
-  // Figure out how many months have ANY transaction data
-  const monthsWithData = new Set(
-    transactions.map((t) => (t as Record<string, unknown>).date?.toString().slice(0, 7)),
-  ).size
+  // Query aggregated data directly from DB — no row limit issues
+  const { data: summaryData } = useQuery({
+    queryKey: ['ytd-summary', householdId, taxYear],
+    queryFn: async () => {
+      if (!householdId) return null
+
+      // Get spending per category
+      const { data: categorySpend, error: spendError } = await supabase
+        .from('transactions')
+        .select('category_id, amount')
+        .eq('household_id', householdId)
+        .gte('date', start.toISOString().slice(0, 10))
+        .lte('date', end.toISOString().slice(0, 10))
+        .limit(10000)
+
+      if (spendError) throw spendError
+
+      // Get distinct months
+      const { data: monthData, error: monthError } = await supabase
+        .from('transactions')
+        .select('date')
+        .eq('household_id', householdId)
+        .gte('date', start.toISOString().slice(0, 10))
+        .lte('date', end.toISOString().slice(0, 10))
+        .limit(10000)
+
+      if (monthError) throw monthError
+
+      const months = new Set(monthData?.map((t) => t.date?.toString().slice(0, 7)) ?? [])
+
+      // Sum per category
+      const byCat: Record<string, number> = {}
+      for (const row of categorySpend ?? []) {
+        if (row.category_id) {
+          byCat[row.category_id] = (byCat[row.category_id] ?? 0) + Number(row.amount)
+        }
+      }
+
+      return { byCat, monthCount: months.size }
+    },
+    enabled: !!householdId,
+  })
+
+  const monthsWithData = summaryData?.monthCount ?? 0
+  const ytdActual = summaryData?.byCat ?? {}
 
   if (monthsWithData === 0) return null
 
-  // YTD actual per category
-  const ytdActual: Record<string, number> = {}
-  for (const txn of transactions) {
-    const t = txn as Record<string, unknown>
-    const cat = t.categories as { name: string; is_budget_category: boolean } | null
-    if (cat?.is_budget_category && !excludedCategories.includes(cat?.name ?? '') && t.category_id) {
-      ytdActual[t.category_id as string] =
-        (ytdActual[t.category_id as string] ?? 0) + Number(t.amount)
-    }
-  }
-
-  // Only count budget limits for months that have transaction data
-  const monthNumbers = new Set(
-    transactions.map((t) => {
-      const dateStr = (t as Record<string, unknown>).date?.toString() ?? ''
-      return parseInt(dateStr.slice(5, 7), 10)
-    }),
-  )
-
+  // Sum budget limits for budget categories only
   const ytdBudget: Record<string, number> = {}
   for (const limit of limits) {
-    if (monthNumbers.has(limit.month) && budgetCatIds.has(limit.category_id)) {
+    if (budgetCatIds.has(limit.category_id)) {
       ytdBudget[limit.category_id] =
         (ytdBudget[limit.category_id] ?? 0) + Number(limit.amount)
     }
   }
 
-  // If no budgets set, use leftToLiveOn * monthsWithData as total budget
   const hasBudgets = Object.values(ytdBudget).some((v) => v > 0)
   const totalYtdBudget = hasBudgets
     ? Object.values(ytdBudget).reduce((a, b) => a + b, 0)
     : leftToLiveOn * monthsWithData
 
-  const totalYtdActual = Object.values(ytdActual).reduce((a, b) => a + b, 0)
+  // Only sum budget categories (excluding rent, utilities, etc.)
+  const totalYtdActual = budgetCategories.reduce(
+    (sum, cat) => sum + (ytdActual[cat.id] ?? 0), 0,
+  )
   const totalRemaining = totalYtdBudget - totalYtdActual
   const monthlyAvgSpend = totalYtdActual / monthsWithData
   const percentUsed = totalYtdBudget > 0 ? Math.round((totalYtdActual / totalYtdBudget) * 100) : 0
@@ -80,7 +107,7 @@ export function YearToDate({ taxYear, householdId, leftToLiveOn }: YearToDatePro
       <div className="p-4 border-b border-border">
         <h3 className="font-semibold">Year to Date</h3>
         <p className="text-xs text-muted-foreground">
-          {monthsWithData} month{monthsWithData > 1 ? 's' : ''} of data ({transactions.length} transactions)
+          {monthsWithData} month{monthsWithData > 1 ? 's' : ''} of data
         </p>
       </div>
 
