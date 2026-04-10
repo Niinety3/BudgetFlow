@@ -88,7 +88,7 @@ export default function DashboardPage() {
           <p className="text-sm text-muted-foreground">Tax Year {formatTaxYear(taxYear)}</p>
         </div>
         <div className="flex gap-1">
-          {[currentTaxYr, currentTaxYr + 1].map((yr) => (
+          {[currentTaxYr - 1, currentTaxYr, currentTaxYr + 1].map((yr) => (
             <button
               key={yr}
               onClick={() => {
