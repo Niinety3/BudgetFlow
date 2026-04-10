@@ -28,39 +28,60 @@ export function YearToDate({ taxYear, householdId, leftToLiveOn }: YearToDatePro
     queryFn: async () => {
       if (!householdId) return null
 
-      // Get spending per category
-      const { data: categorySpend, error: spendError } = await supabase
-        .from('transactions')
-        .select('category_id, amount')
-        .eq('household_id', householdId)
-        .gte('date', start.toISOString().slice(0, 10))
-        .lte('date', end.toISOString().slice(0, 10))
-        .limit(10000)
+      // Get distinct month count via a small query per month
+      const startStr = start.toISOString().slice(0, 10)
+      const endStr = end.toISOString().slice(0, 10)
 
-      if (spendError) throw spendError
-
-      // Get distinct months
-      const { data: monthData, error: monthError } = await supabase
-        .from('transactions')
-        .select('date')
-        .eq('household_id', householdId)
-        .gte('date', start.toISOString().slice(0, 10))
-        .lte('date', end.toISOString().slice(0, 10))
-        .limit(10000)
-
-      if (monthError) throw monthError
-
-      const months = new Set(monthData?.map((t) => t.date?.toString().slice(0, 7)) ?? [])
-
-      // Sum per category
-      const byCat: Record<string, number> = {}
-      for (const row of categorySpend ?? []) {
-        if (row.category_id) {
-          byCat[row.category_id] = (byCat[row.category_id] ?? 0) + Number(row.amount)
-        }
+      // Count months by querying one row per month
+      let monthCount = 0
+      const taxYearMonths: { m: number; y: number }[] = []
+      for (let i = 0; i < 12; i++) {
+        const m = ((3 + i) % 12) + 1 // April=4, May=5, ..., March=3
+        const y = i < 9 ? taxYear : taxYear + 1
+        taxYearMonths.push({ m, y })
       }
 
-      return { byCat, monthCount: months.size }
+      for (const { m, y } of taxYearMonths) {
+        const monthStart = `${y}-${String(m).padStart(2, '0')}-01`
+        const monthEnd = new Date(y, m, 0) // last day of month
+        const monthEndStr = monthEnd.toISOString().slice(0, 10)
+
+        const { count } = await supabase
+          .from('transactions')
+          .select('*', { count: 'exact', head: true })
+          .eq('household_id', householdId)
+          .gte('date', monthStart)
+          .lte('date', monthEndStr)
+
+        if (count && count > 0) monthCount++
+      }
+
+      // Get spending per category — paginate to avoid row limit
+      const byCat: Record<string, number> = {}
+      let offset = 0
+      const pageSize = 1000
+      while (true) {
+        const { data: page } = await supabase
+          .from('transactions')
+          .select('category_id, amount')
+          .eq('household_id', householdId)
+          .gte('date', startStr)
+          .lte('date', endStr)
+          .range(offset, offset + pageSize - 1)
+
+        if (!page || page.length === 0) break
+
+        for (const row of page) {
+          if (row.category_id) {
+            byCat[row.category_id] = (byCat[row.category_id] ?? 0) + Number(row.amount)
+          }
+        }
+
+        if (page.length < pageSize) break
+        offset += pageSize
+      }
+
+      return { byCat, monthCount }
     },
     enabled: !!householdId,
   })
