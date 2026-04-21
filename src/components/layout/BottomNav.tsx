@@ -1,12 +1,12 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Upload, Receipt, PiggyBank, Settings } from 'lucide-react'
+import { LayoutDashboard, Upload, Receipt, Calculator, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navItems = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/import', label: 'Import', icon: Upload },
   { to: '/transactions', label: 'Transactions', icon: Receipt },
-  { to: '/savings', label: 'Savings', icon: PiggyBank },
+  { to: '/planner', label: 'Planner', icon: Calculator },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 
