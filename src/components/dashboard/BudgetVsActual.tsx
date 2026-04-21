@@ -117,7 +117,8 @@ export function BudgetVsActual({
         .eq('month', month)
 
       // Only budget flexible categories that have recent spending (last 3 months)
-      const recentCatIds = new Set<string>()
+      // Only budget flexible categories with 2+ transactions in last 3 months
+      const recentCatCount: Record<string, number> = {}
       const threeMonthsAgo = new Date(year, month - 4, 1).toISOString().slice(0, 10)
       const monthEnd = new Date(year, month, 0).toISOString().slice(0, 10)
       const { data: recentTxns } = await supabase
@@ -130,12 +131,12 @@ export function BudgetVsActual({
 
       if (recentTxns) {
         for (const t of recentTxns) {
-          if (t.category_id) recentCatIds.add(t.category_id)
+          if (t.category_id) recentCatCount[t.category_id] = (recentCatCount[t.category_id] ?? 0) + 1
         }
       }
 
       const activeFlexible = flexibleCategories.filter(
-        (c) => recentCatIds.has(c.id) && (avgByCategory[c.id] ?? 0) > 0,
+        (c) => (recentCatCount[c.id] ?? 0) >= 2 && (avgByCategory[c.id] ?? 0) > 0,
       )
 
       const totalFlexAvg = activeFlexible.reduce(
@@ -209,7 +210,7 @@ export function BudgetVsActual({
             <span className="font-medium">{formatCurrency(leftToLiveOn)}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Fixed costs (subs, services, finance, insurance)</span>
+            <span className="text-muted-foreground">Recurring costs (subs, services, finance)</span>
             <span className="font-medium">- {formatCurrency(fixedExpected)}</span>
           </div>
           <div className="flex justify-between border-t border-border pt-2">
@@ -255,7 +256,7 @@ export function BudgetVsActual({
       <div className="rounded-lg bg-card border border-border overflow-hidden">
         <div className="p-3 border-b border-border bg-muted/30">
           <div className="flex justify-between items-center">
-            <h4 className="text-sm font-medium">Fixed Costs</h4>
+            <h4 className="text-sm font-medium">Recurring Costs</h4>
             <span className="text-sm font-semibold">{formatCurrency(fixedActual)}</span>
           </div>
         </div>
