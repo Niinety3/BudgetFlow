@@ -11,6 +11,7 @@ import CategoriesPage from '@/pages/CategoriesPage'
 import ImportPage from '@/pages/ImportPage'
 import TransactionsPage from '@/pages/TransactionsPage'
 import SavingsPage from '@/pages/SavingsPage'
+import PlannerPage from '@/pages/PlannerPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -88,6 +89,7 @@ export default function App() {
               <Route path="/import" element={<ImportPage />} />
               <Route path="/transactions" element={<TransactionsPage />} />
               <Route path="/savings" element={<SavingsPage />} />
+              <Route path="/planner" element={<PlannerPage />} />
               <Route path="/categories" element={<CategoriesPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>

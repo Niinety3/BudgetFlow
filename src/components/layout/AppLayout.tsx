@@ -1,5 +1,5 @@
 import { Outlet, NavLink } from 'react-router-dom'
-import { LayoutDashboard, Upload, Receipt, PiggyBank, Tags, Settings, LogOut } from 'lucide-react'
+import { LayoutDashboard, Upload, Receipt, PiggyBank, Calculator, Tags, Settings, LogOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
 import BottomNav from './BottomNav'
@@ -9,6 +9,7 @@ const navItems = [
   { to: '/import', label: 'Import', icon: Upload },
   { to: '/transactions', label: 'Transactions', icon: Receipt },
   { to: '/savings', label: 'Savings', icon: PiggyBank },
+  { to: '/planner', label: 'Planner', icon: Calculator },
   { to: '/categories', label: 'Categories', icon: Tags },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
