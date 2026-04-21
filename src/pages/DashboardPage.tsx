@@ -4,12 +4,10 @@ import { calculateIoMTax } from '@/lib/tax'
 import { calculatePayDay } from '@/lib/payday'
 import { useSettings } from '@/hooks/useSettings'
 import { useHousehold } from '@/hooks/useHousehold'
-import { useTransactions } from '@/hooks/useTransactions'
 import { cn } from '@/lib/utils'
 import PayDayBreakdown from '@/components/dashboard/PayDayBreakdown'
 import { BudgetVsActual } from '@/components/dashboard/BudgetVsActual'
 import { SpecialsSection } from '@/components/dashboard/SpecialsSection'
-import { MonthlySummary } from '@/components/dashboard/MonthlySummary'
 import { NeedsReview } from '@/components/dashboard/NeedsReview'
 import { YearToDate } from '@/components/dashboard/YearToDate'
 
@@ -30,11 +28,6 @@ export default function DashboardPage() {
   const { householdId } = useHousehold()
 
   const selectedM = months[selectedMonth]
-  const { transactions } = useTransactions(
-    selectedM.month,
-    selectedM.year,
-    householdId,
-  )
 
   if (loading) {
     return (
@@ -71,14 +64,6 @@ export default function DashboardPage() {
         })
       : null
 
-  // Calculate total budget-category spending for the month (excluding rent + utilities)
-  const excludedCategories = ['Rent / Mortgage', 'Utilities', 'Annual Costs']
-  const totalSpent = transactions
-    .filter((t: Record<string, unknown>) => {
-      const cat = t.categories as { name: string; is_budget_category: boolean } | null
-      return cat?.is_budget_category && !excludedCategories.includes(cat?.name ?? '')
-    })
-    .reduce((sum: number, t: Record<string, unknown>) => sum + Number(t.amount), 0)
 
   return (
     <div className="space-y-6">
@@ -146,15 +131,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Monthly Summary */}
-      {payDayResult && (
-        <MonthlySummary
-          leftToLiveOn={payDayResult.leftToLiveOn}
-          totalSpent={totalSpent}
-        />
-      )}
-
-      {/* Budget vs Actual */}
+      {/* Budget */}
       <BudgetVsActual
         month={selectedM.month}
         year={selectedM.year}

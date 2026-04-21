@@ -7,6 +7,15 @@ import { supabase } from '@/lib/supabase'
 import { useState } from 'react'
 import { formatCurrency, cn } from '@/lib/utils'
 
+// Categories excluded entirely (handled in pay-day flow)
+const PAYDAY_EXCLUDED = ['Rent / Mortgage', 'Utilities', 'Annual Costs', 'Tax']
+
+// Fixed discretionary: known monthly costs, not day-to-day controllable
+const FIXED_DISCRETIONARY = ['Subscriptions', 'Services', 'Finance', 'Insurance']
+
+// Everything else that's is_budget_category and not above = flexible
+// Flexible: Groceries, Shopping, Takeaway, Health, Entertainment, Transport, Golf, etc.
+
 interface BudgetVsActualProps {
   month: number
   year: number
@@ -29,12 +38,14 @@ export function BudgetVsActual({
   const { limits } = useBudgetLimits(taxYear, householdId)
   const { categories } = useCategories()
 
-  const excludedCategories = ['Rent / Mortgage', 'Utilities', 'Annual Costs']
-  const budgetCategories = categories.filter(
-    (c) => c.is_budget_category && !excludedCategories.includes(c.name),
+  const fixedCategories = categories.filter(
+    (c) => c.is_budget_category && FIXED_DISCRETIONARY.includes(c.name),
+  )
+  const flexibleCategories = categories.filter(
+    (c) => c.is_budget_category && !PAYDAY_EXCLUDED.includes(c.name) && !FIXED_DISCRETIONARY.includes(c.name),
   )
 
-  // Sum actual spending per category for this month
+  // Actual spending per category this month
   const actualByCategory: Record<string, number> = {}
   for (const txn of transactions) {
     if (txn.category_id) {
@@ -43,8 +54,7 @@ export function BudgetVsActual({
     }
   }
 
-  // Calculate average spending per category
-  // Use current tax year if it has enough data (3+ months), otherwise fall back to previous year
+  // Averages from historical data (for auto-budget)
   const avgByCategory: Record<string, number> = {}
   function calcAverages(txns: typeof allTaxYearTxns) {
     const monthsWithData = new Set(
@@ -66,83 +76,98 @@ export function BudgetVsActual({
   const currentYearMonths = new Set(
     allTaxYearTxns.map((t) => `${(t as Record<string, unknown>).date}`.slice(0, 7)),
   ).size
+  if (currentYearMonths >= 3) calcAverages(allTaxYearTxns)
+  else if (prevTaxYearTxns.length > 0) calcAverages(prevTaxYearTxns)
+  else calcAverages(allTaxYearTxns)
 
-  if (currentYearMonths >= 3) {
-    calcAverages(allTaxYearTxns)
-  } else if (prevTaxYearTxns.length > 0) {
-    calcAverages(prevTaxYearTxns)
-  } else {
-    calcAverages(allTaxYearTxns)
-  }
+  // Fixed discretionary totals
+  const fixedActual = fixedCategories.reduce((sum, c) => sum + (actualByCategory[c.id] ?? 0), 0)
+  const fixedExpected = fixedCategories.reduce((sum, c) => sum + (avgByCategory[c.id] ?? 0), 0)
 
-  // Get budget limit for a category
+  // Flexible budget = left to live on minus fixed discretionary
+  const flexibleBudgetTotal = Math.max(leftToLiveOn - fixedExpected, 0)
+
+  // Budget limits for flexible categories
   function getLimit(categoryId: string): number {
-    const limit = limits.find(
-      (l) => l.category_id === categoryId && l.month === month,
-    )
+    const limit = limits.find((l) => l.category_id === categoryId && l.month === month)
     return limit ? Number(limit.amount) : 0
   }
 
-  // Check if any budgets are set for this month
   const hasAnyBudgets = limits.some((l) => l.month === month && Number(l.amount) > 0)
+
+  // Days in month for pace calculation
+  const daysInMonth = new Date(year, month, 0).getDate()
+  const today = new Date()
+  const currentDay = (today.getFullYear() === year && today.getMonth() + 1 === month)
+    ? today.getDate()
+    : (month < today.getMonth() + 1 || (month === today.getMonth() + 1 && year <= today.getFullYear())) ? daysInMonth : 0
 
   const [calculating, setCalculating] = useState(false)
 
-  // Auto-generate budgets: average spending scaled to fit leftToLiveOn
   async function autoGenerateBudgets() {
     if (!householdId) return
     setCalculating(true)
     try {
-      const totalAvg = budgetCategories.reduce(
-        (sum, cat) => sum + (avgByCategory[cat.id] ?? 0),
-        0,
-      )
-
-      // Delete existing limits for this month, then insert fresh
-      const { error: deleteError } = await supabase
+      // Delete existing limits for this month
+      await supabase
         .from('budget_limits')
         .delete()
         .eq('household_id', householdId)
         .eq('tax_year', taxYear)
         .eq('month', month)
 
-      if (deleteError) console.error('Delete error:', deleteError)
+      // Only budget flexible categories that have recent spending (last 3 months)
+      const recentCatIds = new Set<string>()
+      const threeMonthsAgo = new Date(year, month - 4, 1).toISOString().slice(0, 10)
+      const monthEnd = new Date(year, month, 0).toISOString().slice(0, 10)
+      const { data: recentTxns } = await supabase
+        .from('transactions')
+        .select('category_id')
+        .eq('household_id', householdId)
+        .gte('date', threeMonthsAgo)
+        .lte('date', monthEnd)
+        .limit(5000)
+
+      if (recentTxns) {
+        for (const t of recentTxns) {
+          if (t.category_id) recentCatIds.add(t.category_id)
+        }
+      }
+
+      const activeFlexible = flexibleCategories.filter(
+        (c) => recentCatIds.has(c.id) && (avgByCategory[c.id] ?? 0) > 0,
+      )
+
+      const totalFlexAvg = activeFlexible.reduce(
+        (sum, cat) => sum + (avgByCategory[cat.id] ?? 0), 0,
+      )
 
       let inserts: { household_id: string; category_id: string; tax_year: number; month: number; amount: number }[]
 
-      if (totalAvg > 0) {
-        // Scale averages to fit leftToLiveOn
-        const scaleFactor = leftToLiveOn / totalAvg
-        inserts = budgetCategories
-          .filter((cat) => (avgByCategory[cat.id] ?? 0) > 0)
-          .map((cat) => ({
-            household_id: householdId,
-            category_id: cat.id,
-            tax_year: taxYear,
-            month,
-            amount: Math.round((avgByCategory[cat.id] ?? 0) * scaleFactor),
-          }))
-      } else {
-        // No transaction data — distribute evenly
-        const perCategory = Math.round(leftToLiveOn / budgetCategories.length)
-        inserts = budgetCategories.map((cat) => ({
+      if (totalFlexAvg > 0) {
+        const scaleFactor = flexibleBudgetTotal / totalFlexAvg
+        inserts = activeFlexible.map((cat) => ({
           household_id: householdId,
           category_id: cat.id,
           tax_year: taxYear,
           month,
-          amount: perCategory,
+          amount: Math.round((avgByCategory[cat.id] ?? 0) * scaleFactor),
+        }))
+      } else {
+        const perCat = Math.round(flexibleBudgetTotal / Math.max(activeFlexible.length, 1))
+        inserts = activeFlexible.map((cat) => ({
+          household_id: householdId,
+          category_id: cat.id,
+          tax_year: taxYear,
+          month,
+          amount: perCat,
         }))
       }
 
       if (inserts.length > 0) {
-        const { error: insertError } = await supabase
-          .from('budget_limits')
-          .insert(inserts)
-
-        if (insertError) console.error('Insert error:', insertError)
+        await supabase.from('budget_limits').insert(inserts)
       }
 
-      // Refresh the query
       queryClient.invalidateQueries({ queryKey: ['budget-limits', householdId, taxYear] })
     } catch (err) {
       console.error('Auto-budget error:', err)
@@ -151,94 +176,187 @@ export function BudgetVsActual({
     }
   }
 
-  let totalBudget = 0
-  let totalActual = 0
+  // Flexible rows
+  let totalFlexBudget = 0
+  let totalFlexActual = 0
+  const flexRows = flexibleCategories
+    .map((cat) => {
+      const budget = getLimit(cat.id)
+      const actual = actualByCategory[cat.id] ?? 0
+      const remaining = budget - actual
+      totalFlexBudget += budget
+      totalFlexActual += actual
+      return { id: cat.id, category: cat.name, budget, actual, remaining }
+    })
+    .filter((r) => r.budget > 0 || r.actual > 0)
 
-  const rows = budgetCategories.map((cat) => {
-    const budget = getLimit(cat.id)
-    const actual = actualByCategory[cat.id] ?? 0
-    const remaining = budget - actual
-    totalBudget += budget
-    totalActual += actual
-    return { id: cat.id, category: cat.name, budget, actual, remaining }
-  })
+  // Overall flexible remaining
+  const flexibleRemaining = (totalFlexBudget > 0 ? totalFlexBudget : flexibleBudgetTotal) - totalFlexActual
+  const percentThrough = currentDay > 0 ? Math.round((currentDay / daysInMonth) * 100) : 100
+  const percentSpent = flexibleBudgetTotal > 0 ? Math.round((totalFlexActual / flexibleBudgetTotal) * 100) : 0
+  const dailyRemaining = currentDay < daysInMonth && flexibleRemaining > 0
+    ? flexibleRemaining / (daysInMonth - currentDay)
+    : 0
 
   return (
-    <div className="rounded-lg bg-card border border-border overflow-hidden">
-      <div className="p-4 border-b border-border flex items-center justify-between">
-        <h3 className="font-semibold">Budget vs Actual</h3>
-        {(allTaxYearTxns.length > 0 || !hasAnyBudgets) && (
+    <div className="space-y-4">
+      {/* Money Flow */}
+      <div className="rounded-lg bg-card border border-border p-4">
+        <h3 className="font-semibold mb-3">Monthly Budget</h3>
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Left to live on</span>
+            <span className="font-medium">{formatCurrency(leftToLiveOn)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Fixed costs (subs, services, finance, insurance)</span>
+            <span className="font-medium">- {formatCurrency(fixedExpected)}</span>
+          </div>
+          <div className="flex justify-between border-t border-border pt-2">
+            <span className="font-semibold">Flexible budget</span>
+            <span className="font-bold text-primary">{formatCurrency(flexibleBudgetTotal)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Pace indicator */}
+      {currentDay > 0 && currentDay < daysInMonth && totalFlexBudget > 0 && (
+        <div className={cn(
+          'rounded-lg border p-4',
+          percentSpent <= percentThrough ? 'bg-success/10 border-success/30' : 'bg-warning/10 border-warning/30',
+        )}>
+          <div className="flex justify-between items-baseline mb-2">
+            <span className="text-sm font-medium">
+              {percentSpent <= percentThrough ? 'On track' : 'Spending fast'}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              Day {currentDay} of {daysInMonth} ({percentThrough}% through month)
+            </span>
+          </div>
+          <div className="h-2 w-full rounded-full bg-muted overflow-hidden mb-2">
+            <div
+              className={cn(
+                'h-full rounded-full transition-all',
+                percentSpent > 100 ? 'bg-destructive' : percentSpent > percentThrough ? 'bg-warning' : 'bg-success',
+              )}
+              style={{ width: `${Math.min(percentSpent, 100)}%` }}
+            />
+          </div>
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>{percentSpent}% of flexible budget spent</span>
+            {dailyRemaining > 0 && (
+              <span className="font-medium text-foreground">{formatCurrency(dailyRemaining)}/day remaining</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Fixed Discretionary */}
+      <div className="rounded-lg bg-card border border-border overflow-hidden">
+        <div className="p-3 border-b border-border bg-muted/30">
+          <div className="flex justify-between items-center">
+            <h4 className="text-sm font-medium">Fixed Costs</h4>
+            <span className="text-sm font-semibold">{formatCurrency(fixedActual)}</span>
+          </div>
+        </div>
+        <div className="divide-y divide-border">
+          {fixedCategories.map((cat) => {
+            const actual = actualByCategory[cat.id] ?? 0
+            const expected = avgByCategory[cat.id] ?? 0
+            if (actual === 0 && expected === 0) return null
+            const diff = actual - expected
+            return (
+              <div key={cat.id} className="flex justify-between items-center px-3 py-2 text-sm">
+                <span>{cat.name}</span>
+                <div className="flex items-center gap-3">
+                  <span>{formatCurrency(actual)}</span>
+                  {expected > 0 && Math.abs(diff) > 1 && (
+                    <span className={cn('text-xs', diff > 0 ? 'text-destructive' : 'text-success')}>
+                      {diff > 0 ? '+' : ''}{formatCurrency(diff)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Flexible Budget */}
+      <div className="rounded-lg bg-card border border-border overflow-hidden">
+        <div className="p-3 border-b border-border flex items-center justify-between">
+          <h4 className="text-sm font-medium">Flexible Spending</h4>
           <button
             type="button"
             onClick={autoGenerateBudgets}
             disabled={calculating}
             className={cn(
-              'rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground',
+              'rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground',
               calculating ? 'opacity-50 cursor-not-allowed' : 'hover:bg-primary/90',
             )}
           >
-            {calculating ? 'Calculating...' : hasAnyBudgets ? 'Recalculate' : 'Auto-set budgets'}
+            {calculating ? 'Setting...' : hasAnyBudgets ? 'Recalculate' : 'Auto-set'}
           </button>
-        )}
-      </div>
+        </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border bg-muted/50">
-              <th className="px-3 py-2 text-left font-medium">Category</th>
-              <th className="px-3 py-2 text-right font-medium">Budget</th>
-              <th className="px-3 py-2 text-right font-medium">Actual</th>
-              <th className="px-3 py-2 text-right font-medium">Remaining</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.category} className="border-b border-border last:border-0">
-                <td className="px-3 py-2">{row.category}</td>
-                <td className="px-3 py-2 text-right text-muted-foreground">
-                  {row.budget > 0 ? formatCurrency(row.budget) : (
-                    <span className="text-xs text-muted-foreground/50">—</span>
-                  )}
-                </td>
-                <td className="px-3 py-2 text-right">
-                  {formatCurrency(row.actual)}
-                </td>
-                <td
-                  className={cn(
-                    'px-3 py-2 text-right font-medium',
-                    row.budget === 0
-                      ? 'text-muted-foreground'
-                      : row.remaining >= 0 ? 'text-success' : 'text-destructive',
-                  )}
-                >
-                  {row.budget > 0 ? formatCurrency(row.remaining) : '—'}
-                </td>
-              </tr>
-            ))}
-            <tr className="bg-muted/50 font-semibold">
-              <td className="px-3 py-2">Total</td>
-              <td className="px-3 py-2 text-right">
-                {totalBudget > 0 ? formatCurrency(totalBudget) : '—'}
-              </td>
-              <td className="px-3 py-2 text-right">
-                {formatCurrency(totalActual)}
-              </td>
-              <td
-                className={cn(
-                  'px-3 py-2 text-right',
-                  totalBudget === 0
-                    ? 'text-muted-foreground'
-                    : totalBudget - totalActual >= 0
-                      ? 'text-success'
-                      : 'text-destructive',
+        <div className="divide-y divide-border">
+          {flexRows.map((row) => {
+            const pct = row.budget > 0 ? Math.min(Math.round((row.actual / row.budget) * 100), 100) : 0
+            return (
+              <div key={row.category} className="px-3 py-2">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-sm">{row.category}</span>
+                  <div className="flex items-center gap-2 text-sm">
+                    <span>{formatCurrency(row.actual)}</span>
+                    {row.budget > 0 && (
+                      <span className="text-xs text-muted-foreground">/ {formatCurrency(row.budget)}</span>
+                    )}
+                  </div>
+                </div>
+                {row.budget > 0 && (
+                  <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                    <div
+                      className={cn(
+                        'h-full rounded-full transition-all',
+                        row.remaining < 0 ? 'bg-destructive' : pct > 80 ? 'bg-warning' : 'bg-success',
+                      )}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
                 )}
-              >
-                {totalBudget > 0 ? formatCurrency(totalBudget - totalActual) : '—'}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+                {row.budget > 0 && (
+                  <div className="flex justify-end mt-0.5">
+                    <span className={cn(
+                      'text-xs font-medium',
+                      row.remaining >= 0 ? 'text-success' : 'text-destructive',
+                    )}>
+                      {row.remaining >= 0 ? `${formatCurrency(row.remaining)} left` : `${formatCurrency(Math.abs(row.remaining))} over`}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Flexible total */}
+        <div className="p-3 border-t border-border bg-muted/30">
+          <div className="flex justify-between items-center text-sm font-semibold">
+            <span>Flexible total</span>
+            <div className="flex items-center gap-2">
+              <span>{formatCurrency(totalFlexActual)}</span>
+              <span className="text-xs text-muted-foreground">/ {formatCurrency(totalFlexBudget > 0 ? totalFlexBudget : flexibleBudgetTotal)}</span>
+            </div>
+          </div>
+          <div className="flex justify-end mt-1">
+            <span className={cn(
+              'text-xs font-medium',
+              flexibleRemaining >= 0 ? 'text-success' : 'text-destructive',
+            )}>
+              {flexibleRemaining >= 0 ? `${formatCurrency(flexibleRemaining)} remaining` : `${formatCurrency(Math.abs(flexibleRemaining))} over budget`}
+            </span>
+          </div>
+        </div>
       </div>
     </div>
   )
