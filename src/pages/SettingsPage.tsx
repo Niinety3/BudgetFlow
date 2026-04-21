@@ -206,6 +206,7 @@ export default function SettingsPage() {
       const flexCats = categories.filter(
         (c) => c.is_budget_category && !PAYDAY_EXCLUDED.includes(c.name) && !FIXED_DISCRETIONARY.includes(c.name),
       )
+      const fixedCats = categories.filter((c) => FIXED_DISCRETIONARY.includes(c.name))
 
       // Get current form values for pay-day calc
       const vals = watchedValues as SettingsFormValues
@@ -226,70 +227,83 @@ export default function SettingsPage() {
         fixedBills: billsTotal,
       })
 
-      // Get averages from all transactions (paginated)
-      const { start, end } = getTaxYearDateRange(taxYear)
-      const allTxns: { category_id: string; amount: number; date: string }[] = []
-      let offset = 0
-      while (true) {
-        const { data: page } = await supabase
-          .from('transactions')
-          .select('category_id, amount, date')
-          .eq('household_id', householdId)
-          .gte('date', start.toISOString().slice(0, 10))
-          .lte('date', end.toISOString().slice(0, 10))
-          .range(offset, offset + 999)
-        if (!page || page.length === 0) break
-        allTxns.push(...page)
-        if (page.length < 1000) break
-        offset += 1000
-      }
-
-      const months = new Set(allTxns.map((t) => t.date?.slice(0, 7)))
-      const monthCount = months.size || 1
-
-      // Avg per flex category
-      const totalByCat: Record<string, number> = {}
-      for (const t of allTxns) {
-        if (t.category_id) totalByCat[t.category_id] = (totalByCat[t.category_id] ?? 0) + Number(t.amount)
-      }
-
-      // Fixed discretionary expected
-      const fixedCats = categories.filter((c) => FIXED_DISCRETIONARY.includes(c.name))
-      const fixedExpected = fixedCats.reduce((s, c) => s + ((totalByCat[c.id] ?? 0) / monthCount), 0)
-      const flexBudget = Math.max(payDay.leftToLiveOn - fixedExpected, 0)
-
-      const flexAvgTotal = flexCats.reduce((s, c) => s + ((totalByCat[c.id] ?? 0) / monthCount), 0)
-      const scale = flexAvgTotal > 0 ? flexBudget / flexAvgTotal : 0
-
-      // Delete all budget limits for current tax year
-      await supabase
+      // Find all tax years that have budget limits
+      const { data: existingLimits } = await supabase
         .from('budget_limits')
-        .delete()
+        .select('tax_year')
         .eq('household_id', householdId)
-        .eq('tax_year', taxYear)
 
-      // Insert for each month that has data
-      const inserts: { household_id: string; category_id: string; tax_year: number; month: number; amount: number }[] = []
-      for (const monthStr of months) {
-        const m = parseInt(monthStr.slice(5, 7), 10)
-        for (const cat of flexCats) {
-          const avg = (totalByCat[cat.id] ?? 0) / monthCount
-          if (avg > 0 && scale > 0) {
-            inserts.push({
-              household_id: householdId,
-              category_id: cat.id,
-              tax_year: taxYear,
-              month: m,
-              amount: Math.round(avg * scale),
-            })
+      const taxYearsToUpdate = new Set(existingLimits?.map((l) => l.tax_year) ?? [])
+      // Also include current tax year
+      taxYearsToUpdate.add(getCurrentTaxYear())
+
+      for (const yr of taxYearsToUpdate) {
+        const { start, end } = getTaxYearDateRange(yr)
+
+        // Get all transactions for this tax year (paginated)
+        const allTxns: { category_id: string; amount: number; date: string }[] = []
+        let offset = 0
+        while (true) {
+          const { data: page } = await supabase
+            .from('transactions')
+            .select('category_id, amount, date')
+            .eq('household_id', householdId)
+            .gte('date', start.toISOString().slice(0, 10))
+            .lte('date', end.toISOString().slice(0, 10))
+            .range(offset, offset + 999)
+          if (!page || page.length === 0) break
+          allTxns.push(...page)
+          if (page.length < 1000) break
+          offset += 1000
+        }
+
+        if (allTxns.length === 0) continue
+
+        const months = new Set(allTxns.map((t) => t.date?.slice(0, 7)))
+        const monthCount = months.size || 1
+
+        // Totals per category
+        const totalByCat: Record<string, number> = {}
+        for (const t of allTxns) {
+          if (t.category_id) totalByCat[t.category_id] = (totalByCat[t.category_id] ?? 0) + Number(t.amount)
+        }
+
+        // Fixed discretionary expected
+        const fixedExpected = fixedCats.reduce((s, c) => s + ((totalByCat[c.id] ?? 0) / monthCount), 0)
+        const flexBudget = Math.max(payDay.leftToLiveOn - fixedExpected, 0)
+
+        const flexAvgTotal = flexCats.reduce((s, c) => s + ((totalByCat[c.id] ?? 0) / monthCount), 0)
+        const scale = flexAvgTotal > 0 ? flexBudget / flexAvgTotal : 0
+
+        // Delete existing limits for this tax year
+        await supabase
+          .from('budget_limits')
+          .delete()
+          .eq('household_id', householdId)
+          .eq('tax_year', yr)
+
+        // Insert for each month that has data
+        const inserts: { household_id: string; category_id: string; tax_year: number; month: number; amount: number }[] = []
+        for (const monthStr of months) {
+          const m = parseInt(monthStr.slice(5, 7), 10)
+          for (const cat of flexCats) {
+            const avg = (totalByCat[cat.id] ?? 0) / monthCount
+            if (avg > 0 && scale > 0) {
+              inserts.push({
+                household_id: householdId,
+                category_id: cat.id,
+                tax_year: yr,
+                month: m,
+                amount: Math.round(avg * scale),
+              })
+            }
           }
         }
-      }
 
-      if (inserts.length > 0) {
-        // Insert in batches of 500
-        for (let i = 0; i < inserts.length; i += 500) {
-          await supabase.from('budget_limits').insert(inserts.slice(i, i + 500))
+        if (inserts.length > 0) {
+          for (let i = 0; i < inserts.length; i += 500) {
+            await supabase.from('budget_limits').insert(inserts.slice(i, i + 500))
+          }
         }
       }
 
