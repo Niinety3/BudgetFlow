@@ -11,7 +11,7 @@ interface YearToDateProps {
   leftToLiveOn: number
 }
 
-export function YearToDate({ taxYear, householdId, leftToLiveOn }: YearToDateProps) {
+export function YearToDate({ taxYear, householdId }: YearToDateProps) {
   const { limits } = useBudgetLimits(taxYear, householdId)
   const { categories } = useCategories()
   const { start, end } = getTaxYearDateRange(taxYear)
@@ -102,14 +102,17 @@ export function YearToDate({ taxYear, householdId, leftToLiveOn }: YearToDatePro
   }
 
   const hasBudgets = Object.values(ytdBudget).some((v) => v > 0)
-  const totalYtdBudget = hasBudgets
-    ? Object.values(ytdBudget).reduce((a, b) => a + b, 0)
-    : leftToLiveOn * monthsWithData
 
-  // Only sum budget categories (excluding rent, utilities, etc.)
+  // Only sum budget categories (excluding rent, utilities, recurring costs)
   const totalYtdActual = budgetCategories.reduce(
     (sum, cat) => sum + (ytdActual[cat.id] ?? 0), 0,
   )
+
+  // Use actual budget limits if set, otherwise don't guess
+  const totalYtdBudget = hasBudgets
+    ? Object.values(ytdBudget).reduce((a, b) => a + b, 0)
+    : 0
+
   const totalRemaining = totalYtdBudget - totalYtdActual
   const monthlyAvgSpend = totalYtdActual / monthsWithData
   const percentUsed = totalYtdBudget > 0 ? Math.round((totalYtdActual / totalYtdBudget) * 100) : 0
@@ -136,51 +139,59 @@ export function YearToDate({ taxYear, householdId, leftToLiveOn }: YearToDatePro
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-3 p-4 border-b border-border">
         <div className="rounded-lg bg-muted/50 p-3">
-          <p className="text-xs text-muted-foreground">Total spent</p>
+          <p className="text-xs text-muted-foreground">Total spent (flexible)</p>
           <p className="text-lg font-bold">{formatCurrency(totalYtdActual)}</p>
         </div>
         <div className="rounded-lg bg-muted/50 p-3">
           <p className="text-xs text-muted-foreground">Monthly average</p>
           <p className="text-lg font-bold">{formatCurrency(monthlyAvgSpend)}</p>
         </div>
-        <div className="rounded-lg bg-muted/50 p-3">
-          <p className="text-xs text-muted-foreground">
-            {hasBudgets ? 'YTD budget' : `Budget (${monthsWithData} × ${formatCurrency(leftToLiveOn)})`}
-          </p>
-          <p className="text-lg font-bold">{formatCurrency(totalYtdBudget)}</p>
-        </div>
-        <div className={cn(
-          'rounded-lg p-3',
-          totalRemaining >= 0 ? 'bg-success/10' : 'bg-destructive/10',
-        )}>
-          <p className="text-xs text-muted-foreground">
-            {totalRemaining >= 0 ? 'Under budget' : 'Over budget'}
-          </p>
-          <p className={cn(
-            'text-lg font-bold',
-            totalRemaining >= 0 ? 'text-success' : 'text-destructive',
-          )}>
-            {formatCurrency(Math.abs(totalRemaining))}
-          </p>
-        </div>
+        {hasBudgets ? (
+          <>
+            <div className="rounded-lg bg-muted/50 p-3">
+              <p className="text-xs text-muted-foreground">YTD budget</p>
+              <p className="text-lg font-bold">{formatCurrency(totalYtdBudget)}</p>
+            </div>
+            <div className={cn(
+              'rounded-lg p-3',
+              totalRemaining >= 0 ? 'bg-success/10' : 'bg-destructive/10',
+            )}>
+              <p className="text-xs text-muted-foreground">
+                {totalRemaining >= 0 ? 'Under budget' : 'Over budget'}
+              </p>
+              <p className={cn(
+                'text-lg font-bold',
+                totalRemaining >= 0 ? 'text-success' : 'text-destructive',
+              )}>
+                {formatCurrency(Math.abs(totalRemaining))}
+              </p>
+            </div>
+          </>
+        ) : (
+          <div className="col-span-2 rounded-lg bg-muted/50 p-3">
+            <p className="text-xs text-muted-foreground">No budgets set — use Recalculate on each month to set them</p>
+          </div>
+        )}
       </div>
 
       {/* Progress bar */}
-      <div className="px-4 py-3 border-b border-border">
-        <div className="flex justify-between text-xs text-muted-foreground mb-1">
-          <span>{percentUsed}% of YTD budget used</span>
-          <span>{formatCurrency(totalRemaining)} remaining</span>
+      {hasBudgets && (
+        <div className="px-4 py-3 border-b border-border">
+          <div className="flex justify-between text-xs text-muted-foreground mb-1">
+            <span>{percentUsed}% of YTD budget used</span>
+            <span>{formatCurrency(totalRemaining)} remaining</span>
+          </div>
+          <div className="h-3 w-full rounded-full bg-muted overflow-hidden">
+            <div
+              className={cn(
+                'h-full rounded-full transition-all',
+                percentUsed > 100 ? 'bg-destructive' : percentUsed > 85 ? 'bg-warning' : 'bg-success',
+              )}
+              style={{ width: `${Math.min(percentUsed, 100)}%` }}
+            />
+          </div>
         </div>
-        <div className="h-3 w-full rounded-full bg-muted overflow-hidden">
-          <div
-            className={cn(
-              'h-full rounded-full transition-all',
-              percentUsed > 100 ? 'bg-destructive' : percentUsed > 85 ? 'bg-warning' : 'bg-success',
-            )}
-            style={{ width: `${Math.min(percentUsed, 100)}%` }}
-          />
-        </div>
-      </div>
+      )}
 
       {/* Category breakdown */}
       <div className="overflow-x-auto">
