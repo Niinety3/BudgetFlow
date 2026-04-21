@@ -81,7 +81,6 @@ export function BudgetVsActual({
   else calcAverages(allTaxYearTxns)
 
   // Fixed discretionary totals
-  const fixedActual = fixedCategories.reduce((sum, c) => sum + (actualByCategory[c.id] ?? 0), 0)
   const fixedExpected = fixedCategories.reduce((sum, c) => sum + (avgByCategory[c.id] ?? 0), 0)
 
   // Flexible budget = left to live on minus fixed discretionary
@@ -209,10 +208,33 @@ export function BudgetVsActual({
             <span className="text-muted-foreground">Left to live on</span>
             <span className="font-medium">{formatCurrency(leftToLiveOn)}</span>
           </div>
+
+          {/* Recurring costs breakdown inline */}
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Recurring costs (subs, services, finance)</span>
+            <span className="text-muted-foreground">Recurring costs</span>
             <span className="font-medium">- {formatCurrency(fixedExpected)}</span>
           </div>
+          <div className="pl-4 space-y-1">
+            {fixedCategories.map((cat) => {
+              const actual = actualByCategory[cat.id] ?? 0
+              const expected = avgByCategory[cat.id] ?? 0
+              if (actual === 0 && expected === 0) return null
+              return (
+                <div key={cat.id} className="flex justify-between text-xs text-muted-foreground">
+                  <span>{cat.name}</span>
+                  <span>
+                    {formatCurrency(actual)} / {formatCurrency(expected)}
+                    {Math.abs(actual - expected) > 1 && (
+                      <span className={cn('ml-1', actual > expected ? 'text-destructive' : 'text-success')}>
+                        ({actual > expected ? '+' : ''}{formatCurrency(actual - expected)})
+                      </span>
+                    )}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+
           <div className="flex justify-between border-t border-border pt-2">
             <span className="font-semibold">Flexible budget</span>
             <span className="font-bold text-primary">{formatCurrency(flexibleBudgetTotal)}</span>
@@ -251,37 +273,6 @@ export function BudgetVsActual({
           </div>
         </div>
       )}
-
-      {/* Fixed Discretionary */}
-      <div className="rounded-lg bg-card border border-border overflow-hidden">
-        <div className="p-3 border-b border-border bg-muted/30">
-          <div className="flex justify-between items-center">
-            <h4 className="text-sm font-medium">Recurring Costs</h4>
-            <span className="text-sm font-semibold">{formatCurrency(fixedActual)}</span>
-          </div>
-        </div>
-        <div className="divide-y divide-border">
-          {fixedCategories.map((cat) => {
-            const actual = actualByCategory[cat.id] ?? 0
-            const expected = avgByCategory[cat.id] ?? 0
-            if (actual === 0 && expected === 0) return null
-            const diff = actual - expected
-            return (
-              <div key={cat.id} className="flex justify-between items-center px-3 py-2 text-sm">
-                <span>{cat.name}</span>
-                <div className="flex items-center gap-3">
-                  <span>{formatCurrency(actual)}</span>
-                  {expected > 0 && Math.abs(diff) > 1 && (
-                    <span className={cn('text-xs', diff > 0 ? 'text-destructive' : 'text-success')}>
-                      {diff > 0 ? '+' : ''}{formatCurrency(diff)}
-                    </span>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
 
       {/* Flexible Budget */}
       <div className="rounded-lg bg-card border border-border overflow-hidden">
