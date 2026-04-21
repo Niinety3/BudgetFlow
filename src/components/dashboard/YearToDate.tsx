@@ -16,7 +16,8 @@ export function YearToDate({ taxYear, householdId, leftToLiveOn }: YearToDatePro
   const { categories } = useCategories()
   const { start, end } = getTaxYearDateRange(taxYear)
 
-  const excludedCategories = ['Rent / Mortgage', 'Utilities', 'Annual Costs', 'Tax']
+  // Exclude pay-day deductions AND recurring costs (same as monthly budget view)
+  const excludedCategories = ['Rent / Mortgage', 'Utilities', 'Annual Costs', 'Tax', 'Subscriptions', 'Services', 'Finance', 'Insurance']
   const budgetCategories = categories.filter(
     (c) => c.is_budget_category && !excludedCategories.includes(c.name),
   )
