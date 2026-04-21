@@ -6,13 +6,7 @@ interface PayDayBreakdownProps {
 }
 
 export default function PayDayBreakdown({ result }: PayDayBreakdownProps) {
-  const lines = [
-    { label: '1. Tax set-aside', value: result.taxSetAside },
-    { label: '2. Savings (% of after-tax)', value: result.savingsAmount },
-    { label: '3. Rent gap', value: result.rentGap },
-    { label: '4. Current rent', value: result.currentRent },
-    { label: '5. Fixed bills', value: result.fixedBills },
-  ]
+  const savingsTransfer = result.taxSetAside + result.savingsAmount + result.rentGap
 
   return (
     <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
@@ -26,16 +20,42 @@ export default function PayDayBreakdown({ result }: PayDayBreakdownProps) {
         </span>
       </div>
 
-      {/* Deductions */}
+      {/* Move to savings */}
       <div className="space-y-2">
-        {lines.map(({ label, value }) => (
-          <div key={label} className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">{label}</span>
-            <span className="text-sm text-card-foreground">
-              - {formatCurrency(value)}
-            </span>
-          </div>
-        ))}
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">1. Tax set-aside</span>
+          <span className="text-sm text-card-foreground">- {formatCurrency(result.taxSetAside)}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">2. Savings ({result.savingsAmount > 0 ? '% of after-tax' : '0%'})</span>
+          <span className="text-sm text-card-foreground">- {formatCurrency(result.savingsAmount)}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">3. Rent gap</span>
+          <span className="text-sm text-card-foreground">- {formatCurrency(result.rentGap)}</span>
+        </div>
+      </div>
+
+      {/* Transfer to savings callout */}
+      <div className="mt-3 rounded-lg bg-primary/10 px-4 py-3">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-semibold text-primary">Transfer to savings</span>
+          <span className="text-lg font-bold text-primary">
+            {formatCurrency(savingsTransfer)}
+          </span>
+        </div>
+      </div>
+
+      {/* Stays in current account */}
+      <div className="mt-4 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">4. Current rent</span>
+          <span className="text-sm text-card-foreground">- {formatCurrency(result.currentRent)}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">5. Fixed bills</span>
+          <span className="text-sm text-card-foreground">- {formatCurrency(result.fixedBills)}</span>
+        </div>
       </div>
 
       {/* Total deductions */}
