@@ -17,7 +17,7 @@ export function parseRevolutCSV(csvText: string): ParseResult {
     const state = (row['State'] ?? '').trim().toLowerCase()
     if (state !== 'completed') continue
 
-    const rawDate = (row['Started Date'] ?? row['Completed Date'] ?? '').trim()
+    const rawDate = (row['Completed Date'] ?? row['Started Date'] ?? '').trim()
     const date = parseRevolutDate(rawDate)
     const description = (row['Description'] ?? '').trim()
     const amount = parseFloat(row['Amount'] ?? '0')
