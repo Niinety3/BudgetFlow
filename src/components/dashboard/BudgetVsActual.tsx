@@ -80,8 +80,31 @@ export function BudgetVsActual({
   else if (prevTaxYearTxns.length > 0) calcAverages(prevTaxYearTxns)
   else calcAverages(allTaxYearTxns)
 
-  // Fixed discretionary totals
-  const fixedExpected = fixedCategories.reduce((sum, c) => sum + (avgByCategory[c.id] ?? 0), 0)
+  // Calculate 3-month average for recurring/fixed costs (more accurate than full year)
+  const fixedAvgByCategory: Record<string, number> = {}
+  {
+    const threeMonthsAgo = new Date(year, month - 4, 1)
+    const currentMonthEnd = new Date(year, month - 1, 0)
+    const recentFixedTxns = allTaxYearTxns.filter((t) => {
+      const d = new Date((t as Record<string, unknown>).date as string)
+      return d >= threeMonthsAgo && d <= currentMonthEnd
+    })
+    const recentMonths = new Set(
+      recentFixedTxns.map((t) => `${(t as Record<string, unknown>).date}`.slice(0, 7)),
+    ).size || 1
+    for (const txn of recentFixedTxns) {
+      const catId = (txn as Record<string, unknown>).category_id as string | null
+      if (catId) {
+        fixedAvgByCategory[catId] = (fixedAvgByCategory[catId] ?? 0) + Number((txn as Record<string, unknown>).amount)
+      }
+    }
+    for (const catId of Object.keys(fixedAvgByCategory)) {
+      fixedAvgByCategory[catId] = fixedAvgByCategory[catId] / recentMonths
+    }
+  }
+
+  // Fixed discretionary totals (using 3-month average)
+  const fixedExpected = fixedCategories.reduce((sum, c) => sum + (fixedAvgByCategory[c.id] ?? 0), 0)
 
   // Flexible budget = left to live on minus fixed discretionary
   const flexibleBudgetTotal = Math.max(leftToLiveOn - fixedExpected, 0)
@@ -217,7 +240,7 @@ export function BudgetVsActual({
           <div className="pl-4 space-y-1">
             {fixedCategories.map((cat) => {
               const actual = actualByCategory[cat.id] ?? 0
-              const expected = avgByCategory[cat.id] ?? 0
+              const expected = fixedAvgByCategory[cat.id] ?? 0
               if (actual === 0 && expected === 0) return null
               return (
                 <div key={cat.id} className="flex justify-between text-xs text-muted-foreground">
