@@ -76,6 +76,7 @@ export default function ImportPage() {
     const categoryNames = categories.map((c) => c.name)
 
     // Filter out transactions that already exist in the database
+    // Check exact date AND ±1 day to catch Started vs Completed date mismatches
     let newTransactions = parsed.result.transactions
     if (householdId) {
       const { data: existing } = await supabase
@@ -84,9 +85,19 @@ export default function ImportPage() {
         .eq('household_id', householdId)
 
       if (existing && existing.length > 0) {
-        const existingSet = new Set(
-          existing.map((e) => `${e.date}|${e.description}|${Number(e.amount).toFixed(2)}`),
-        )
+        const existingSet = new Set<string>()
+        for (const e of existing) {
+          const desc = e.description
+          const amt = Number(e.amount).toFixed(2)
+          const d = new Date(e.date)
+          // Add exact date and ±1 day
+          for (const offset of [-1, 0, 1]) {
+            const offsetDate = new Date(d)
+            offsetDate.setDate(offsetDate.getDate() + offset)
+            const dateStr = offsetDate.toISOString().slice(0, 10)
+            existingSet.add(`${dateStr}|${desc}|${amt}`)
+          }
+        }
         const before = newTransactions.length
         newTransactions = newTransactions.filter(
           (t) => !existingSet.has(`${t.date}|${t.description}|${t.amount.toFixed(2)}`),
