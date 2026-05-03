@@ -25,10 +25,10 @@ export function useTransactions(
         .limit(5000)
 
       if (month !== null && year !== null) {
-        const { start, end } = getMonthDateRange(month, year)
+        const { startStr, endStr } = getMonthDateRange(month, year)
         query = query
-          .gte('date', start.toISOString().slice(0, 10))
-          .lte('date', end.toISOString().slice(0, 10))
+          .gte('date', startStr)
+          .lte('date', endStr)
       }
 
       const { data, error } = await query
@@ -151,7 +151,7 @@ export function useAllTransactionsForTaxYear(
   taxYear: number,
   householdId: string | null,
 ) {
-  const { start, end } = getTaxYearDateRange(taxYear)
+  const { startStr, endStr } = getTaxYearDateRange(taxYear)
 
   const { data, isLoading: loading } = useQuery({
     queryKey: ['transactions-tax-year', householdId, taxYear],
@@ -161,8 +161,8 @@ export function useAllTransactionsForTaxYear(
         .from('transactions')
         .select('*, categories(name, is_budget_category)')
         .eq('household_id', householdId)
-        .gte('date', start.toISOString().slice(0, 10))
-        .lte('date', end.toISOString().slice(0, 10))
+        .gte('date', startStr)
+        .lte('date', endStr)
         .order('date', { ascending: false })
         .limit(5000)
 

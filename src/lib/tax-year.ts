@@ -33,18 +33,22 @@ export function getTaxYearMonths(taxYear: number): Array<{ month: number; year: 
   return months
 }
 
-export function getTaxYearDateRange(taxYear: number): { start: Date; end: Date } {
-  // start = April 6 of taxYear, end = April 5 of taxYear+1
-  const start = new Date(taxYear, 3, 6)   // month is 0-based: 3 = April
-  const end = new Date(taxYear + 1, 3, 5) // April 5 of next year
-  return { start, end }
+export function getTaxYearDateRange(taxYear: number): { start: Date; end: Date; startStr: string; endStr: string } {
+  const start = new Date(taxYear, 3, 6)
+  const end = new Date(taxYear + 1, 3, 5)
+  const startStr = `${taxYear}-04-06`
+  const endStr = `${taxYear + 1}-04-05`
+  return { start, end, startStr, endStr }
 }
 
-export function getMonthDateRange(month: number, year: number): { start: Date; end: Date } {
-  // Full calendar month boundaries (1st to last day)
+export function getMonthDateRange(month: number, year: number): { start: Date; end: Date; startStr: string; endStr: string } {
   const start = new Date(year, month - 1, 1)
-  const end = new Date(year, month, 0) // Day 0 of next month = last day of this month
-  return { start, end }
+  const end = new Date(year, month, 0)
+  // Build date strings directly to avoid timezone issues
+  const startStr = `${year}-${String(month).padStart(2, '0')}-01`
+  const lastDay = new Date(year, month, 0).getDate()
+  const endStr = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+  return { start, end, startStr, endStr }
 }
 
 export function formatTaxYear(taxYear: number): string {
