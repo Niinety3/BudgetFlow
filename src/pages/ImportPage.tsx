@@ -184,11 +184,21 @@ export default function ImportPage() {
     const matched: MatchedRefund[] = []
     if (refunds.length > 0 && householdId) {
       for (const refund of refunds) {
+        // Check if this refund was already processed (marker exists)
+        const { data: marker } = await supabase
+          .from('transactions')
+          .select('id')
+          .eq('household_id', householdId)
+          .eq('description', `REFUND: ${refund.description}`)
+          .eq('date', refund.date)
+          .limit(1)
+
+        if (marker && marker.length > 0) continue
+
         // Extract first meaningful word(s) for fuzzy matching
-        // e.g. "TESCO STORES 1234" → search for "%TESCO%"
         const words = refund.description.trim().split(/\s+/)
         const keyword = words[0] ?? ''
-        if (keyword.length < 3) continue // skip very short descriptions
+        if (keyword.length < 3) continue
 
         // Search by keyword match + exact amount
         const { data: exactMatches } = await supabase
@@ -329,6 +339,17 @@ export default function ImportPage() {
           // Partial refund — reduce the original transaction amount
           await supabase.from('transactions').update({ amount: diff }).eq('id', mr.matchedTransaction.id)
         }
+        // Insert a refund marker so this refund won't be shown again on next import
+        // Stored with REFUND: prefix so it doesn't appear as a real transaction
+        await supabase.from('transactions').insert({
+          household_id: householdId,
+          date: mr.refund.date,
+          description: `REFUND: ${mr.refund.description}`,
+          amount: 0,
+          category_id: null,
+          who: 'shared',
+          source: 'manual',
+        }).select().maybeSingle()
         refundsProcessed++
       }
 
