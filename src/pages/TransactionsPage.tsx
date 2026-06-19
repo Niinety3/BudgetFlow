@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, X } from 'lucide-react'
+import { Plus, X, Trash2 } from 'lucide-react'
 import { TransactionFilters, type Filters } from '@/components/transactions/TransactionFilters'
 import { TransactionList } from '@/components/transactions/TransactionList'
 import { useTransactions } from '@/hooks/useTransactions'
@@ -41,6 +41,27 @@ export default function TransactionsPage() {
   })
 
   const [ruleStatus, setRuleStatus] = useState<string | null>(null)
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
+  const [clearing, setClearing] = useState(false)
+
+  async function clearMonth() {
+    if (!householdId || filters.month === null || filters.year === null) return
+    setClearing(true)
+    const startStr = `${filters.year}-${String(filters.month).padStart(2, '0')}-01`
+    const lastDay = new Date(filters.year, filters.month, 0).getDate()
+    const endStr = `${filters.year}-${String(filters.month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+
+    await supabase
+      .from('transactions')
+      .delete()
+      .eq('household_id', householdId)
+      .gte('date', startStr)
+      .lte('date', endStr)
+
+    setClearing(false)
+    setShowClearConfirm(false)
+    refetch()
+  }
   const [sortBy, setSortBy] = useState<'date' | 'merchant' | 'amount' | 'category'>('date')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
@@ -135,15 +156,53 @@ export default function TransactionsPage() {
     <div className="p-4 max-w-2xl mx-auto">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">Transactions</h1>
-        <button
-          type="button"
-          onClick={() => setShowAddForm(!showAddForm)}
-          className="flex items-center gap-1 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-        >
-          {showAddForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-          {showAddForm ? 'Cancel' : 'Add'}
-        </button>
+        <div className="flex gap-2">
+          {filters.month !== null && (
+            <button
+              type="button"
+              onClick={() => setShowClearConfirm(true)}
+              className="flex items-center gap-1 rounded-md border border-destructive/50 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10"
+            >
+              <Trash2 className="h-4 w-4" />
+              Clear month
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="flex items-center gap-1 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          >
+            {showAddForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+            {showAddForm ? 'Cancel' : 'Add'}
+          </button>
+        </div>
       </div>
+
+      {showClearConfirm && (
+        <div className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 p-4 space-y-2">
+          <p className="text-sm font-medium text-destructive">
+            Delete all transactions for {filters.month !== null ? new Date(filters.year!, filters.month! - 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }) : ''}?
+          </p>
+          <p className="text-xs text-muted-foreground">This cannot be undone. You can re-import from CSV afterwards.</p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={clearMonth}
+              disabled={clearing}
+              className="rounded-md bg-destructive px-3 py-1.5 text-sm font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
+            >
+              {clearing ? 'Deleting...' : 'Yes, delete all'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowClearConfirm(false)}
+              className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {ruleStatus && (
         <div className="mb-4 rounded-lg bg-success/10 border border-success/50 p-3 text-sm text-success">
