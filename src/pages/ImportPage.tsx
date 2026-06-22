@@ -9,6 +9,7 @@ import { categoriseTransaction } from '@/lib/csv/categoriser'
 import { suggestCategory } from '@/lib/suggest-category'
 import { useCategories } from '@/hooks/useCategories'
 import { useHousehold } from '@/hooks/useHousehold'
+import { useSettings } from '@/hooks/useSettings'
 import { supabase } from '@/lib/supabase'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
@@ -39,6 +40,7 @@ const groqApiKey = import.meta.env.VITE_GROQ_API_KEY ?? ''
 
 export default function ImportPage() {
   const { householdId } = useHousehold()
+  const { settings } = useSettings()
   const { categories, rules, addRule } = useCategories()
   const [step, setStep] = useState<Step>('upload')
   const [previewData, setPreviewData] = useState<{
@@ -106,6 +108,27 @@ export default function ImportPage() {
         if (dupsRemoved > 0) {
           console.log(`Pre-filtered ${dupsRemoved} already-imported transactions`)
         }
+      }
+    }
+
+    // Filter out transactions that match Fixed Bills (already accounted for in pay-day flow)
+    if (settings?.fixed_bills && settings.fixed_bills.length > 0) {
+      const beforeBills = newTransactions.length
+      const billKeywords = settings.fixed_bills.map((bill: { name: string; amount: number }) => ({
+        keywords: bill.name.toLowerCase().split(/\s+/).filter((w: string) => w.length >= 3),
+        amount: bill.amount,
+      }))
+      newTransactions = newTransactions.filter((t) => {
+        const descLower = t.description.toLowerCase()
+        return !billKeywords.some((bill: { keywords: string[]; amount: number }) => {
+          const nameMatch = bill.keywords.some((kw: string) => descLower.includes(kw))
+          const amountMatch = Math.abs(t.amount - bill.amount) < 1
+          return nameMatch && amountMatch
+        })
+      })
+      const billsSkipped = beforeBills - newTransactions.length
+      if (billsSkipped > 0) {
+        console.log(`Skipped ${billsSkipped} transactions matching Fixed Bills`)
       }
     }
 
