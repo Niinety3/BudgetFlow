@@ -297,7 +297,7 @@ export function BudgetVsActual({
         </div>
       )}
 
-      {/* Flexible Budget */}
+      {/* Flexible Budget — pooled view */}
       <div className="rounded-lg bg-card border border-border overflow-hidden">
         <div className="p-3 border-b border-border flex items-center justify-between">
           <h4 className="text-sm font-medium">Flexible Spending</h4>
@@ -314,62 +314,52 @@ export function BudgetVsActual({
           </button>
         </div>
 
-        <div className="divide-y divide-border">
-          {flexRows.map((row) => {
-            const pct = row.budget > 0 ? Math.min(Math.round((row.actual / row.budget) * 100), 100) : 0
-            return (
-              <div key={row.category} className="px-3 py-2">
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-sm">{row.category}</span>
-                  <div className="flex items-center gap-2 text-sm">
-                    <span>{formatCurrency(row.actual)}</span>
-                    {row.budget > 0 && (
-                      <span className="text-xs text-muted-foreground">/ {formatCurrency(row.budget)}</span>
-                    )}
-                  </div>
-                </div>
-                {row.budget > 0 && (
-                  <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                    <div
-                      className={cn(
-                        'h-full rounded-full transition-all',
-                        row.remaining < 0 ? 'bg-destructive' : pct > 80 ? 'bg-warning' : 'bg-success',
-                      )}
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                )}
-                {row.budget > 0 && (
-                  <div className="flex justify-end mt-0.5">
-                    <span className={cn(
-                      'text-xs font-medium',
-                      row.remaining >= 0 ? 'text-success' : 'text-destructive',
-                    )}>
-                      {row.remaining >= 0 ? `${formatCurrency(row.remaining)} left` : `${formatCurrency(Math.abs(row.remaining))} over`}
-                    </span>
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-
-        {/* Flexible total */}
-        <div className="p-3 border-t border-border bg-muted/30">
-          <div className="flex justify-between items-center text-sm font-semibold">
-            <span>Flexible total</span>
-            <div className="flex items-center gap-2">
-              <span>{formatCurrency(totalFlexActual)}</span>
-              <span className="text-xs text-muted-foreground">/ {formatCurrency(totalFlexBudget > 0 ? totalFlexBudget : flexibleBudgetTotal)}</span>
+        {/* Pooled total at the top — the main thing that matters */}
+        <div className="p-4 border-b border-border">
+          <div className="flex justify-between items-baseline mb-1">
+            <span className="text-sm text-muted-foreground">Spent</span>
+            <div>
+              <span className="text-lg font-bold">{formatCurrency(totalFlexActual)}</span>
+              <span className="text-sm text-muted-foreground"> of {formatCurrency(totalFlexBudget > 0 ? totalFlexBudget : flexibleBudgetTotal)}</span>
             </div>
           </div>
-          <div className="flex justify-end mt-1">
+          <div className="flex justify-end">
             <span className={cn(
-              'text-xs font-medium',
+              'text-sm font-semibold',
               flexibleRemaining >= 0 ? 'text-success' : 'text-destructive',
             )}>
-              {flexibleRemaining >= 0 ? `${formatCurrency(flexibleRemaining)} remaining` : `${formatCurrency(Math.abs(flexibleRemaining))} over budget`}
+              {flexibleRemaining >= 0
+                ? `${formatCurrency(flexibleRemaining)} left for the month`
+                : `⚠ ${formatCurrency(Math.abs(flexibleRemaining))} over budget`}
             </span>
+          </div>
+        </div>
+
+        {/* Per-category breakdown — allocation vs actual, no individual remaining */}
+        <div className="p-3 border-b border-border">
+          <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 gap-y-1.5 text-xs items-center">
+            <span className="text-muted-foreground font-medium">Category</span>
+            <span className="text-muted-foreground font-medium text-right">Allocated</span>
+            <span className="text-muted-foreground font-medium text-right">Actual</span>
+            <span className="w-4" />
+            {flexRows.map((row) => {
+              const ok = row.budget === 0 || row.actual <= row.budget
+              return (
+                <div key={row.category} className="contents">
+                  <span className="text-sm">{row.category}</span>
+                  <span className="text-sm text-muted-foreground text-right">
+                    {row.budget > 0 ? formatCurrency(row.budget) : '—'}
+                  </span>
+                  <span className="text-sm text-right">{formatCurrency(row.actual)}</span>
+                  <span className={cn(
+                    'text-sm text-right',
+                    ok ? 'text-success' : 'text-warning',
+                  )}>
+                    {row.budget === 0 ? '' : ok ? '✓' : '⚠'}
+                  </span>
+                </div>
+              )
+            })}
           </div>
         </div>
       </div>
