@@ -13,8 +13,10 @@ const PAYDAY_EXCLUDED = ['Rent / Mortgage', 'Utilities', 'Annual Costs', 'Tax']
 // Fixed discretionary: known monthly costs, not day-to-day controllable
 const FIXED_DISCRETIONARY = ['Subscriptions', 'Services', 'Finance', 'Insurance']
 
-// Everything else that's is_budget_category and not above = flexible
-// Flexible: Groceries, Shopping, Takeaway, Health, Entertainment, Transport, Golf, etc.
+// Main budgeted categories: the ones you actively plan for
+const MAIN_BUDGETED = ['Groceries / Food', 'Shopping']
+
+// Everything else flexible (Transport, Takeaway, Health, Entertainment, etc.) is pooled.
 
 interface BudgetVsActualProps {
   month: number
@@ -157,19 +159,23 @@ export function BudgetVsActual({
         }
       }
 
-      const activeFlexible = flexibleCategories.filter(
-        (c) => (recentCatCount[c.id] ?? 0) >= 2 && (avgByCategory[c.id] ?? 0) > 0,
+      // Only budget the MAIN_BUDGETED categories (Groceries + Shopping)
+      // Everything else is part of the pooled "other flexible"
+      const mainCats = flexibleCategories.filter(
+        (c) => MAIN_BUDGETED.includes(c.name) && (avgByCategory[c.id] ?? 0) > 0,
       )
 
-      const totalFlexAvg = activeFlexible.reduce(
-        (sum, cat) => sum + (avgByCategory[cat.id] ?? 0), 0,
-      )
+      // Calculate proportional split based on historical averages
+      const allFlexAvg = flexibleCategories
+        .filter((c) => (recentCatCount[c.id] ?? 0) >= 2 || MAIN_BUDGETED.includes(c.name))
+        .reduce((sum, cat) => sum + (avgByCategory[cat.id] ?? 0), 0)
 
       let inserts: { household_id: string; category_id: string; tax_year: number; month: number; amount: number }[]
 
-      if (totalFlexAvg > 0) {
-        const scaleFactor = flexibleBudgetTotal / totalFlexAvg
-        inserts = activeFlexible.map((cat) => ({
+      if (allFlexAvg > 0) {
+        // Scale: main categories get their share of flexibleBudgetTotal based on historical proportion
+        const scaleFactor = flexibleBudgetTotal / allFlexAvg
+        inserts = mainCats.map((cat) => ({
           household_id: householdId,
           category_id: cat.id,
           tax_year: taxYear,
@@ -177,8 +183,9 @@ export function BudgetVsActual({
           amount: Math.round((avgByCategory[cat.id] ?? 0) * scaleFactor),
         }))
       } else {
-        const perCat = Math.round(flexibleBudgetTotal / Math.max(activeFlexible.length, 1))
-        inserts = activeFlexible.map((cat) => ({
+        // No data — split flexibleBudgetTotal evenly between main categories (with some buffer for other)
+        const perCat = Math.round((flexibleBudgetTotal * 0.7) / Math.max(mainCats.length, 1))
+        inserts = mainCats.map((cat) => ({
           household_id: householdId,
           category_id: cat.id,
           tax_year: taxYear,
@@ -199,10 +206,11 @@ export function BudgetVsActual({
     }
   }
 
-  // Flexible rows
+  // Main budgeted rows (Groceries, Shopping) — these have individual budgets
   let totalFlexBudget = 0
   let totalFlexActual = 0
-  const flexRows = flexibleCategories
+  const mainRows = flexibleCategories
+    .filter((cat) => MAIN_BUDGETED.includes(cat.name))
     .map((cat) => {
       const budget = getLimit(cat.id)
       const actual = actualByCategory[cat.id] ?? 0
@@ -211,7 +219,27 @@ export function BudgetVsActual({
       totalFlexActual += actual
       return { id: cat.id, category: cat.name, budget, actual, remaining }
     })
-    .filter((r) => r.budget > 0 || r.actual > 0)
+
+  // Other flexible rows — pooled (no per-category budget)
+  const otherRows = flexibleCategories
+    .filter((cat) => !MAIN_BUDGETED.includes(cat.name))
+    .map((cat) => {
+      const budget = getLimit(cat.id)
+      const actual = actualByCategory[cat.id] ?? 0
+      totalFlexBudget += budget
+      totalFlexActual += actual
+      return { id: cat.id, category: cat.name, budget, actual }
+    })
+    .filter((r) => r.actual > 0)
+    .sort((a, b) => b.actual - a.actual)
+
+  const otherActual = otherRows.reduce((s, r) => s + r.actual, 0)
+  const otherBudget = otherRows.reduce((s, r) => s + r.budget, 0)
+
+  // Other pool budget = flexible budget - what's allocated to main categories
+  const mainBudgetTotal = mainRows.reduce((s, r) => s + r.budget, 0)
+  const otherPoolBudget = otherBudget > 0 ? otherBudget : Math.max(flexibleBudgetTotal - mainBudgetTotal, 0)
+  const otherRemaining = otherPoolBudget - otherActual
 
   // Overall flexible remaining
   const flexibleRemaining = (totalFlexBudget > 0 ? totalFlexBudget : flexibleBudgetTotal) - totalFlexActual
@@ -335,33 +363,98 @@ export function BudgetVsActual({
           </div>
         </div>
 
-        {/* Per-category breakdown — allocation vs actual, no individual remaining */}
-        <div className="p-3 border-b border-border">
-          <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 gap-y-1.5 text-xs items-center">
-            <span className="text-muted-foreground font-medium">Category</span>
-            <span className="text-muted-foreground font-medium text-right">Allocated</span>
-            <span className="text-muted-foreground font-medium text-right">Actual</span>
-            <span className="w-4" />
-            {flexRows.map((row) => {
-              const ok = row.budget === 0 || row.actual <= row.budget
-              return (
-                <div key={row.category} className="contents">
-                  <span className="text-sm">{row.category}</span>
-                  <span className="text-sm text-muted-foreground text-right">
-                    {row.budget > 0 ? formatCurrency(row.budget) : '—'}
-                  </span>
-                  <span className="text-sm text-right">{formatCurrency(row.actual)}</span>
+        {/* Main budgeted categories — Groceries & Shopping */}
+        <div className="p-4 border-b border-border space-y-3">
+          {mainRows.map((row) => {
+            const pct = row.budget > 0 ? Math.min(Math.round((row.actual / row.budget) * 100), 100) : 0
+            const over = row.actual > row.budget && row.budget > 0
+            return (
+              <div key={row.category}>
+                <div className="flex justify-between items-baseline mb-1">
+                  <span className="text-sm font-medium">{row.category}</span>
+                  <div className="text-sm">
+                    <span className="font-semibold">{formatCurrency(row.actual)}</span>
+                    <span className="text-muted-foreground"> / {formatCurrency(row.budget)}</span>
+                  </div>
+                </div>
+                {row.budget > 0 && (
+                  <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                    <div
+                      className={cn(
+                        'h-full rounded-full transition-all',
+                        over ? 'bg-destructive' : pct > 80 ? 'bg-warning' : 'bg-success',
+                      )}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                )}
+                <div className="flex justify-end mt-0.5">
                   <span className={cn(
-                    'text-sm text-right',
-                    ok ? 'text-success' : 'text-warning',
+                    'text-xs font-medium',
+                    over ? 'text-destructive' : 'text-success',
                   )}>
-                    {row.budget === 0 ? '' : ok ? '✓' : '⚠'}
+                    {row.budget === 0
+                      ? 'No budget set'
+                      : over
+                        ? `${formatCurrency(Math.abs(row.remaining))} over`
+                        : `${formatCurrency(row.remaining)} left`}
                   </span>
                 </div>
-              )
-            })}
-          </div>
+              </div>
+            )
+          })}
         </div>
+
+        {/* Other flexible — pooled */}
+        {otherRows.length > 0 && (
+          <div className="p-4">
+            <div className="flex justify-between items-baseline mb-2">
+              <span className="text-sm font-medium">Other flexible</span>
+              <div className="text-sm">
+                <span className="font-semibold">{formatCurrency(otherActual)}</span>
+                {otherPoolBudget > 0 && (
+                  <span className="text-muted-foreground"> / {formatCurrency(otherPoolBudget)}</span>
+                )}
+              </div>
+            </div>
+            {otherPoolBudget > 0 && (() => {
+              const pct = Math.min(Math.round((otherActual / otherPoolBudget) * 100), 100)
+              const over = otherActual > otherPoolBudget
+              return (
+                <>
+                  <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden mb-1">
+                    <div
+                      className={cn(
+                        'h-full rounded-full transition-all',
+                        over ? 'bg-destructive' : pct > 80 ? 'bg-warning' : 'bg-success',
+                      )}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-end mb-2">
+                    <span className={cn(
+                      'text-xs font-medium',
+                      over ? 'text-destructive' : 'text-success',
+                    )}>
+                      {over
+                        ? `${formatCurrency(Math.abs(otherRemaining))} over`
+                        : `${formatCurrency(otherRemaining)} left`}
+                    </span>
+                  </div>
+                </>
+              )
+            })()}
+            {/* Breakdown of other categories */}
+            <div className="space-y-1 mt-2 pt-2 border-t border-border">
+              {otherRows.map((row) => (
+                <div key={row.category} className="flex justify-between text-xs text-muted-foreground">
+                  <span>{row.category}</span>
+                  <span>{formatCurrency(row.actual)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
