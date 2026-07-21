@@ -171,6 +171,11 @@ export function BudgetVsActual({
         (sum, cat) => sum + (avgByCategory[cat.id] ?? 0), 0,
       )
 
+      console.log('[Auto-budget] flexibleBudgetTotal:', flexibleBudgetTotal)
+      console.log('[Auto-budget] allFlexAvg:', allFlexAvg)
+      console.log('[Auto-budget] mainCats:', mainCats.map((c) => ({ name: c.name, avg: avgByCategory[c.id] })))
+      console.log('[Auto-budget] all flex categories:', flexibleCategories.map((c) => ({ name: c.name, avg: avgByCategory[c.id] ?? 0 })))
+
       let inserts: { household_id: string; category_id: string; tax_year: number; month: number; amount: number }[]
 
       if (allFlexAvg > 0) {
