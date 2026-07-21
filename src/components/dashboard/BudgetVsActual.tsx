@@ -244,10 +244,12 @@ export function BudgetVsActual({
   const otherPoolBudget = otherBudget > 0 ? otherBudget : Math.max(flexibleBudgetTotal - mainBudgetTotal, 0)
   const otherRemaining = otherPoolBudget - otherActual
 
-  // Overall flexible remaining
-  const flexibleRemaining = (totalFlexBudget > 0 ? totalFlexBudget : flexibleBudgetTotal) - totalFlexActual
+  // Displayed total = main categories + pool (so the pool budget is reflected in the header)
+  const displayTotalBudget = mainBudgetTotal + otherPoolBudget
+  const effectiveBudget = displayTotalBudget > 0 ? displayTotalBudget : flexibleBudgetTotal
+  const flexibleRemaining = effectiveBudget - totalFlexActual
   const percentThrough = currentDay > 0 ? Math.round((currentDay / daysInMonth) * 100) : 100
-  const percentSpent = flexibleBudgetTotal > 0 ? Math.round((totalFlexActual / flexibleBudgetTotal) * 100) : 0
+  const percentSpent = effectiveBudget > 0 ? Math.round((totalFlexActual / effectiveBudget) * 100) : 0
   const dailyRemaining = currentDay < daysInMonth && flexibleRemaining > 0
     ? flexibleRemaining / (daysInMonth - currentDay)
     : 0
@@ -297,7 +299,7 @@ export function BudgetVsActual({
       </div>
 
       {/* Pace indicator */}
-      {currentDay > 0 && currentDay < daysInMonth && totalFlexBudget > 0 && (
+      {currentDay > 0 && currentDay < daysInMonth && effectiveBudget > 0 && (
         <div className={cn(
           'rounded-lg border p-4',
           percentSpent <= percentThrough ? 'bg-success/10 border-success/30' : 'bg-warning/10 border-warning/30',
@@ -351,7 +353,7 @@ export function BudgetVsActual({
             <span className="text-sm text-muted-foreground">Spent</span>
             <div>
               <span className="text-lg font-bold">{formatCurrency(totalFlexActual)}</span>
-              <span className="text-sm text-muted-foreground"> of {formatCurrency(totalFlexBudget > 0 ? totalFlexBudget : flexibleBudgetTotal)}</span>
+              <span className="text-sm text-muted-foreground"> of {formatCurrency(effectiveBudget)}</span>
             </div>
           </div>
           <div className="flex justify-end">
