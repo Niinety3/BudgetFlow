@@ -171,11 +171,6 @@ export function BudgetVsActual({
         (sum, cat) => sum + (avgByCategory[cat.id] ?? 0), 0,
       )
 
-      console.log('[Auto-budget] flexibleBudgetTotal:', flexibleBudgetTotal)
-      console.log('[Auto-budget] allFlexAvg:', allFlexAvg)
-      console.log('[Auto-budget] mainCats:', mainCats.map((c) => ({ name: c.name, avg: avgByCategory[c.id] })))
-      console.log('[Auto-budget] all flex categories:', flexibleCategories.map((c) => ({ name: c.name, avg: avgByCategory[c.id] ?? 0 })))
-
       let inserts: { household_id: string; category_id: string; tax_year: number; month: number; amount: number }[]
 
       if (allFlexAvg > 0) {
@@ -227,7 +222,7 @@ export function BudgetVsActual({
     })
 
   // Other flexible rows — pooled (no per-category budget)
-  const otherRows = flexibleCategories
+  const allOtherRows = flexibleCategories
     .filter((cat) => !MAIN_BUDGETED.includes(cat.name))
     .map((cat) => {
       const budget = getLimit(cat.id)
@@ -236,11 +231,13 @@ export function BudgetVsActual({
       totalFlexActual += actual
       return { id: cat.id, category: cat.name, budget, actual }
     })
+
+  const otherRows = allOtherRows
     .filter((r) => r.actual > 0)
     .sort((a, b) => b.actual - a.actual)
 
-  const otherActual = otherRows.reduce((s, r) => s + r.actual, 0)
-  const otherBudget = otherRows.reduce((s, r) => s + r.budget, 0)
+  const otherActual = allOtherRows.reduce((s, r) => s + r.actual, 0)
+  const otherBudget = allOtherRows.reduce((s, r) => s + r.budget, 0)
 
   // Other pool budget = flexible budget - what's allocated to main categories
   const mainBudgetTotal = mainRows.reduce((s, r) => s + r.budget, 0)
@@ -411,8 +408,8 @@ export function BudgetVsActual({
           })}
         </div>
 
-        {/* Other flexible — pooled */}
-        {otherRows.length > 0 && (
+        {/* Other flexible — pooled (always shown so the remaining pool budget is visible) */}
+        {(otherPoolBudget > 0 || otherActual > 0) && (
           <div className="p-4">
             <div className="flex justify-between items-baseline mb-2">
               <span className="text-sm font-medium">Other flexible</span>
@@ -450,15 +447,17 @@ export function BudgetVsActual({
                 </>
               )
             })()}
-            {/* Breakdown of other categories */}
-            <div className="space-y-1 mt-2 pt-2 border-t border-border">
-              {otherRows.map((row) => (
-                <div key={row.category} className="flex justify-between text-xs text-muted-foreground">
-                  <span>{row.category}</span>
-                  <span>{formatCurrency(row.actual)}</span>
-                </div>
-              ))}
-            </div>
+            {/* Breakdown of categories with spending this month */}
+            {otherRows.length > 0 && (
+              <div className="space-y-1 mt-2 pt-2 border-t border-border">
+                {otherRows.map((row) => (
+                  <div key={row.category} className="flex justify-between text-xs text-muted-foreground">
+                    <span>{row.category}</span>
+                    <span>{formatCurrency(row.actual)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
