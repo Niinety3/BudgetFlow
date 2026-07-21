@@ -165,10 +165,11 @@ export function BudgetVsActual({
         (c) => MAIN_BUDGETED.includes(c.name) && (avgByCategory[c.id] ?? 0) > 0,
       )
 
-      // Calculate proportional split based on historical averages
-      const allFlexAvg = flexibleCategories
-        .filter((c) => (recentCatCount[c.id] ?? 0) >= 2 || MAIN_BUDGETED.includes(c.name))
-        .reduce((sum, cat) => sum + (avgByCategory[cat.id] ?? 0), 0)
+      // Calculate proportional split based on ALL flexible category averages
+      // This ensures Groceries+Shopping only get their historical share, leaving room for other
+      const allFlexAvg = flexibleCategories.reduce(
+        (sum, cat) => sum + (avgByCategory[cat.id] ?? 0), 0,
+      )
 
       let inserts: { household_id: string; category_id: string; tax_year: number; month: number; amount: number }[]
 
@@ -183,7 +184,7 @@ export function BudgetVsActual({
           amount: Math.round((avgByCategory[cat.id] ?? 0) * scaleFactor),
         }))
       } else {
-        // No data — split flexibleBudgetTotal evenly between main categories (with some buffer for other)
+        // No data — allocate 70% to main categories, leave 30% for other
         const perCat = Math.round((flexibleBudgetTotal * 0.7) / Math.max(mainCats.length, 1))
         inserts = mainCats.map((cat) => ({
           household_id: householdId,
